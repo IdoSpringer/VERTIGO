@@ -37,7 +37,6 @@ class SignedPairsDataset(Dataset):
         sample = (tcra, len_a, tcrb, len_b, peptide, len_p, float(sign), float(weight))
         return sample
 
-
     @staticmethod
     def get_max_length(x):
         return len(max(x, key=len))
@@ -53,6 +52,9 @@ class SignedPairsDataset(Dataset):
         # TCR is converted to numbers at this point
         # We need to match the autoencoder atox, therefore -1
         for i in range(len(tcr_batch)):
+            # missing alpha
+            if tcr_batch[i] == [0]:
+                continue
             tcr_batch[i] = tcr_batch[i] + [self.atox['X']]
             for j in range(len(tcr_batch[i])):
                 padding[i, j, tcr_batch[i][j] - 1] = 1
@@ -61,7 +63,7 @@ class SignedPairsDataset(Dataset):
     def ae_collate(self, batch):
         tcra, len_a, tcrb, len_b, peptide, len_p, sign, weight = zip(*batch)
         lst = []
-        lst.append(torch.LongTensor(self.pad_sequence(tcra)))
+        lst.append(torch.FloatTensor(self.one_hot_encoding(tcra)))
         lst.append(torch.FloatTensor(self.one_hot_encoding(tcrb)))
         lst.append(torch.LongTensor(self.pad_sequence(peptide)))
         lst.append(torch.LongTensor(len_p))
@@ -100,13 +102,42 @@ class DiabetesDataset(SignedPairsDataset):
     pass
 
 
+class SinglePeptideDataset(SignedPairsDataset):
+    def __init__(self, samples, peptide, force_peptide=False):
+        super().__init__(samples)
+        self.amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
+        self.atox = {amino: index for index, amino in enumerate(['PAD'] + self.amino_acids + ['X'])}
+        if force_peptide:
+            # we do it only for MPS and we have to check that the signs are correct
+            pep_data = (peptide, 'mhc', 'protein')
+            self.data = [(pair[0], pep_data, pair[-1]) for pair in samples]
+        else:
+            self.data = [pair for pair in samples if pair[1][0] == peptide]
+
+
 def check():
     with open('mcpas_train_samples.pickle', 'rb') as handle:
         train = pickle.load(handle)
-    # train_dataset = SignedPairsDataset(train)
-    train_dataset = DiabetesDataset(train, weight_factor=10)
-    dataloader = DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=4,
-                            collate_fn=train_dataset.lstm_collate)
+    train_dataset = SignedPairsDataset(train)
+    # train_dataset = DiabetesDataset(train, weight_factor=10)
+    dataloader = DataLoader(train_dataset, batch_size=10, shuffle=False, num_workers=4,
+                            collate_fn=train_dataset.ae_collate)
     for batch in dataloader:
-        print(batch)
+        # print(batch)
+        # tcr length (including X, 0 for missing)
+        # print(torch.sum(batch[0][0]).item())
+        tcra, tcrb, peps, pep_lens, sign, weight = batch
+        len_a = torch.sum(tcra, dim=[1, 2])
+        missing = (len_a == 0).nonzero(as_tuple=True)
+        print(missing)
+        full = len_a.nonzero(as_tuple=True)
+        print(full)
+        tcra_batch_ful = (tcra[full],)
+        tcrb_batch_ful = (tcrb[full],)
+        tcrb_batch_mis = (tcrb[missing],)
+        tcr_batch_ful = (tcra_batch_ful, tcrb_batch_ful)
+        tcr_batch_mis = (None, tcrb_batch_mis)
+
         exit()
+
+check()

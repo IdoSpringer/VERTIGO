@@ -8,14 +8,27 @@ import os
 import csv
 
 
-def load_all_data(path):
+def invalid(seq):
+    amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
+    return any([aa not in amino_acids for aa in seq])
+
+
+print(invalid('ge3gre'))
+print(invalid('CASQF'))
+
+
+def load_all_data(path, filetype='benny_chain_alpha'):
     all_data = []
+
     for directory, subdirectories, files in os.walk(path):
         for file in files:
             with open(os.path.join(directory, file), mode='r') as infile:
                 reader = csv.reader(infile)
-                data = [row[1] for row in reader]
-                all_data += [str(i) + 'X' for i in data[1:] if str(i).find('*') == -1 and str(i).find('X') == -1]
+                if filetype == 'benny_chain_alpha' and 'alpha' in file:
+                    data = [row[0] for row in reader]
+                else:
+                    data = [row[1] for row in reader]
+                all_data += [str(i) + 'X' for i in data[1:] if not invalid(str(i))]
     # a one file full path
     if len(all_data) == 0:
         with open(path, mode='r') as infile:
@@ -177,8 +190,8 @@ def main(argv):
 
 if __name__ == '__main__':
     main(sys.argv)
-    # argv[1] = 'BM_data_CDR3s'
+    # argv[1] = 'benny_chain'
     # argv[2] = 'cuda:0'
-    # argv[3] = 'tcr_autoencoder_model.pt'
-    # argv[4] = 30
+    # argv[3] = 'tcra_ae_dim_100.pt'
+    # argv[4] = 100
 

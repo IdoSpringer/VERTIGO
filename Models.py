@@ -91,10 +91,11 @@ class LSTM_Encoder(nn.Module):
 
 
 class AE_Encoder(nn.Module):
-    def __init__(self, encoding_dim, input_dim=21, max_len=28, train_ae=True):
+    def __init__(self, encoding_dim, tcr_type, input_dim=21, max_len=28, train_ae=True):
         super(AE_Encoder, self).__init__()
         # Dimensions
         self.encoding_dim = encoding_dim
+        self.tcr_type = tcr_type
         self.input_dim = input_dim
         self.max_len = max_len
         self.autoencoder = PaddingAutoencoder(max_len, input_dim, encoding_dim)
@@ -102,7 +103,10 @@ class AE_Encoder(nn.Module):
 
     def init_ae_params(self, train_ae=True):
         ae_dir = 'TCR_Autoencoder'
-        ae_file = os.sep.join([ae_dir, 'tcr_ae_dim_' + str(self.encoding_dim) + '.pt'])
+        if self.tcr_type == 'alpha':
+            ae_file = os.sep.join([ae_dir, 'tcra_ae_dim_' + str(self.encoding_dim) + '.pt'])
+        elif self.tcr_type == 'beta':
+            ae_file = os.sep.join([ae_dir, 'tcrb_ae_dim_' + str(self.encoding_dim) + '.pt'])
         checkpoint = torch.load(ae_file)
         self.autoencoder.load_state_dict(checkpoint['model_state_dict'])
         if train_ae is False:
@@ -118,6 +122,7 @@ class AE_Encoder(nn.Module):
         return encoded_tcrs
 
 
+# irrelevant (implemented as lightning module)
 class ERGO(nn.Module):
     def __init__(self, tcr_encoding_model, embedding_dim, lstm_dim, encoding_dim, dropout=0.1):
         super(ERGO, self).__init__()
