@@ -9,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning.logging import TensorBoardLogger
 from pytorch_lightning.callbacks import EarlyStopping
 from argparse import Namespace
+from argparse import ArgumentParser
 import torch
 import Sampler
 
@@ -206,23 +207,6 @@ def diabetes_test_set(model):
     pass
 
 
-
-# chack diabetes with different weight factor
-# checkpoint_path = 'mcpas_without_alpha/version_8/checkpoints/_ckpt_epoch_35.ckpt'
-# checkpoint_path = 'mcpas_without_alpha/version_5/checkpoints/_ckpt_epoch_40.ckpt'
-# checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
-# checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
-# checkpoint_path = 'mcpas_without_alpha/version_50/checkpoints/_ckpt_epoch_19.ckpt'
-# with alpha
-checkpoint_path = 'mcpas_with_alpha/version_2/checkpoints/_ckpt_epoch_31.ckpt'
-args = {'dataset': 'mcpas', 'tcr_encoding_model': 'LSTM', 'use_alpha': True,
-            'embedding_dim': 10, 'lstm_dim': 500, 'encoding_dim': 'none', 'dropout': 0.1}
-hparams = Namespace(**args)
-checkpoint = checkpoint_path
-model = load_model(hparams, checkpoint)
-diabetes_test_set(model)
-
-
 def mps():
     # today
     # try diabetes single cell (will probably fail but lets try)
@@ -238,6 +222,25 @@ def tpp_ii():
 
 
 def tpp_iii():
+    pass
+
+
+if __name__ == '__main__':
+    # chack diabetes with different weight factor
+    # checkpoint_path = 'mcpas_without_alpha/version_8/checkpoints/_ckpt_epoch_35.ckpt'
+    # checkpoint_path = 'mcpas_without_alpha/version_5/checkpoints/_ckpt_epoch_40.ckpt'
+    # checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
+    # checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
+    checkpoint_path = 'mcpas_without_alpha/version_21/checkpoints/_ckpt_epoch_31.ckpt'
+    # checkpoint_path = 'mcpas_without_alpha/version_50/checkpoints/_ckpt_epoch_19.ckpt'
+    # with alpha
+    # checkpoint_path = 'mcpas_with_alpha/version_2/checkpoints/_ckpt_epoch_31.ckpt'
+    args = {'dataset': 'mcpas', 'tcr_encoding_model': 'LSTM', 'use_alpha': False,
+            'embedding_dim': 10, 'lstm_dim': 500, 'encoding_dim': 'none', 'dropout': 0.1}
+    hparams = Namespace(**args)
+    checkpoint = checkpoint_path
+    model = load_model(hparams, checkpoint)
+    diabetes_test_set(model)
     pass
 
 # it should be easy because the datasets are fixed and the model is saved in a lightning checkpoint

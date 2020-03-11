@@ -56,14 +56,14 @@ class SignedPairsDataset(Dataset):
             if tcr_batch[i] == [0]:
                 continue
             tcr_batch[i] = tcr_batch[i] + [self.atox['X']]
-            for j in range(len(tcr_batch[i])):
+            for j in range(min(len(tcr_batch[i]), max_len)):
                 padding[i, j, tcr_batch[i][j] - 1] = 1
         return padding
 
     def ae_collate(self, batch):
         tcra, len_a, tcrb, len_b, peptide, len_p, sign, weight = zip(*batch)
         lst = []
-        lst.append(torch.FloatTensor(self.one_hot_encoding(tcra)))
+        lst.append(torch.FloatTensor(self.one_hot_encoding(tcra, max_len=34)))
         lst.append(torch.FloatTensor(self.one_hot_encoding(tcrb)))
         lst.append(torch.LongTensor(self.pad_sequence(peptide)))
         lst.append(torch.LongTensor(len_p))
@@ -140,4 +140,4 @@ def check():
 
         exit()
 
-check()
+# check()

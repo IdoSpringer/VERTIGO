@@ -11,8 +11,9 @@ from Models import PaddingAutoencoder, AE_Encoder, LSTM_Encoder, ERGO
 import pickle
 import numpy as np
 from sklearn.metrics import roc_auc_score, roc_curve
+from argparse import ArgumentParser
+
 # keep up the good work :)
-# todo AE for alpha mechanism
 
 
 class ERGOLightning(pl.LightningModule):
@@ -32,7 +33,7 @@ class ERGOLightning(pl.LightningModule):
         # TCR Encoder
         if self.tcr_encoding_model == 'AE':
             if self.use_alpha:
-                self.tcra_encoder = AE_Encoder(encoding_dim=self.encoding_dim, tcr_type='alpha')
+                self.tcra_encoder = AE_Encoder(encoding_dim=self.encoding_dim, tcr_type='alpha', max_len=34)
             self.tcrb_encoder = AE_Encoder(encoding_dim=self.encoding_dim, tcr_type='beta')
         elif self.tcr_encoding_model == 'LSTM':
             if self.use_alpha:
@@ -114,12 +115,12 @@ class ERGOLightning(pl.LightningModule):
                 tcrb_batch = (None, (tcrb, len_b))
                 y_hat = self.forward(tcrb_batch, peps, pep_lens).squeeze()
         y = sign
-        return y, y_hat
+        return y, y_hat, weight
 
     def training_step(self, batch, batch_idx):
         # REQUIRED
         self.train()
-        y, y_hat = self.step(batch)
+        y, y_hat, weight = self.step(batch)
         loss = F.binary_cross_entropy(y_hat, y, weight=weight)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
@@ -127,7 +128,7 @@ class ERGOLightning(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # OPTIONAL
         self.eval()
-        y, y_hat = self.step(batch)
+        y, y_hat, _ = self.step(batch)
         return {'val_loss': F.binary_cross_entropy(y_hat, y), 'y_hat': y_hat, 'y': y}
 
     def validation_end(self, outputs):
@@ -142,18 +143,9 @@ class ERGOLightning(pl.LightningModule):
         return {'avg_val_loss': avg_loss, 'val_auc': auc, 'log': tensorboard_logs}
 
     def test_step(self, batch, batch_idx):
-        # OPTIONAL
-        # result = self.validation_step(batch, batch_idx)
-        # return {'y_hat': result['y_hat'], 'y': result['y']}
         pass
     
     def test_end(self, outputs):
-        # OPTIONAL
-        # y = torch.cat([x['y'] for x in outputs])
-        # y_hat = torch.cat([x['y_hat'] for x in outputs])
-        # auc = roc_auc_score(y.cpu(), y_hat.cpu())
-        # print(auc)
-        # return {'spb_auc': auc}
         pass
 
     def configure_optimizers(self):
@@ -194,11 +186,9 @@ class ERGOLightning(pl.LightningModule):
 
 class ERGODiabetes(ERGOLightning):
 
-    def __init__(self, weight_factor, dataset, tcr_encoding_model, use_alpha,
-                 embedding_dim, lstm_dim, encoding_dim, dropout=0.1):
-        super().__init__(dataset, tcr_encoding_model, use_alpha, embedding_dim,
-                         lstm_dim, encoding_dim, dropout=0.1)
-        self.weight_factor = weight_factor
+    def __init__(self, hparams):
+        super().__init__(hparams)
+        self.weight_factor = hparams.weight_factor
 
     @pl.data_loader
     def train_dataloader(self):
@@ -213,19 +203,56 @@ class ERGODiabetes(ERGOLightning):
         return DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=10, collate_fn=collate_fn)
 
 
-def main():
-    model = ERGODiabetes(dataset='mcpas', tcr_encoding_model='LSTM', use_alpha=False,
-                          embedding_dim=10, lstm_dim=500, encoding_dim=None, weight_factor=20)
-    logger = TensorBoardLogger("diabetes_logs", name="mcpas_without_alpha", version='20')
+def diabetes_experiment():
+    parser = ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='mcpas')
+    parser.add_argument('--tcr_encoding_model', type=str, default='LSTM')
+    parser.add_argument('--use_alpha', type=bool, default=True)
+    parser.add_argument('--embedding_dim', type=int, default=10)
+    parser.add_argument('--lstm_dim', type=int, default=500)
+    parser.add_argument('--encoding_dim', type=int, default=100)
+    parser.add_argument('--dropout', type=float, default=0.1)
+    # for diabetes
+    parser.add_argument('--weight_factor', type=int, default=5)
+    hparams = parser.parse_args()
+    model = ERGODiabetes(hparams)
+    # logger = TensorBoardLogger("diabetes_logs", name="d_mcpas_lstm_with_alpha")
+    logger = TensorBoardLogger("diabetes_logs", name="d_mcpas_ae_without_alpha")
+
     early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
-    trainer = Trainer(gpus=[2], logger=logger, early_stop_callback=early_stop_callback)
+    trainer = Trainer(gpus=[4], logger=logger, early_stop_callback=early_stop_callback)
+    trainer.fit(model)
+
+
+def ergo_ii_experiment():
+    parser = ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='mcpas')
+    parser.add_argument('--tcr_encoding_model', type=str, default='LSTM')
+    parser.add_argument('--use_alpha', type=bool, default=True)
+    parser.add_argument('--embedding_dim', type=int, default=10)
+    parser.add_argument('--lstm_dim', type=int, default=500)
+    parser.add_argument('--encoding_dim', type=int, default=100)
+    parser.add_argument('--dropout', type=float, default=0.1)
+    hparams = parser.parse_args()
+    model = ERGOLightning(hparams)
+    # logger = TensorBoardLogger("ERGO-II_logs", name="mcpas_ae_with_alpha")
+    # logger = TensorBoardLogger("ERGO-II_logs", name="vdjdb_ae_with_alpha")
+    # logger = TensorBoardLogger("ERGO-II_logs", name="mcpas_ae_without_alpha")
+    logger = TensorBoardLogger("ERGO-II_logs", name="vdjdb_ae_without_alpha")
+
+    early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
+    trainer = Trainer(gpus=[1], logger=logger, early_stop_callback=early_stop_callback)
     trainer.fit(model)
 
 
 if __name__ == '__main__':
-    # main()
+    # ergo_ii_experiment()
+    diabetes_experiment()
     pass
 
 
 # NOTE: fix sklearn import problem with this in terminal:
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/dsi/speingi/anaconda3/lib/
+
+# see logs
+# tensorboard --logdir dir

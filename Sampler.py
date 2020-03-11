@@ -12,7 +12,7 @@ def read_data(datafile, file_key):
     if file_key == 'mcpas':
         data = pd.read_csv(datafile, engine='python')
         for index in range(len(data)):
-            tcra = data['CDR3.alpha.aa'][index]
+            tcr = data['CDR3.alpha.aa'][index]
             tcrb = data['CDR3.beta.aa'][index]
             v = data['TRBV'][index]
             j = data['TRBJ'][index]
