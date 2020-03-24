@@ -22,7 +22,7 @@ import Sampler
 #  MPS
 # all test today
 # then we could check a trained model and compare tests to first ERGO paper
-# todo for SPB, check alpha+beta/beta ratio in data for the peptides
+
 
 
 def get_new_tcrs_and_peps(datafiles):
@@ -78,6 +78,30 @@ def spb(model, datafiles, peptide):
         outputs.append(model.validation_step(batch, batch_idx))
     auc = model.validation_end(outputs)['val_auc']
     print(auc)
+    pass
+
+
+def spb_with_more_negatives(model, datafiles, peptide):
+    test = get_tpp_ii_pairs(datafiles)
+    # Regular SPB
+    # test_dataset = SinglePeptideDataset(test, peptide)
+    # More negatives
+    test_dataset = SinglePeptideDataset(test, peptide, force_peptide=True, spb_force=True)
+    if model.tcr_encoding_model == 'AE':
+        collate_fn = test_dataset.ae_collate
+    elif model.tcr_encoding_model == 'LSTM':
+        collate_fn = test_dataset.lstm_collate
+    loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=10, collate_fn=collate_fn)
+    outputs = []
+    i = 0
+    positives = 0
+    for batch_idx, batch in enumerate(loader):
+        i += 1
+        outputs.append(model.validation_step(batch, batch_idx))
+    if i:
+        print('positives:', int(torch.cat([x['y'] for x in outputs]).sum().item()))
+        auc = model.validation_end(outputs)['val_auc']
+        print(auc)
     pass
 
 
@@ -146,15 +170,6 @@ def check2(checkpoint_path):
         except ValueError:
             pass
 
-
-# chack diabetes with different weight factor
-# checkpoint_path = 'mcpas_without_alpha/version_8/checkpoints/_ckpt_epoch_35.ckpt'
-# checkpoint_path = 'mcpas_without_alpha/version_5/checkpoints/_ckpt_epoch_40.ckpt'
-# checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
-# checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
-# with alpha
-# checkpoint_path = 'mcpas_with_alpha/version_2/checkpoints/_ckpt_epoch_31.ckpt'
-# check2(checkpoint_path)
 
 def diabetes_test_set(model):
     # 8 paired samples, 4 peptides
@@ -229,9 +244,9 @@ if __name__ == '__main__':
     # chack diabetes with different weight factor
     # checkpoint_path = 'mcpas_without_alpha/version_8/checkpoints/_ckpt_epoch_35.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_5/checkpoints/_ckpt_epoch_40.ckpt'
-    # checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
+    checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
-    checkpoint_path = 'mcpas_without_alpha/version_21/checkpoints/_ckpt_epoch_31.ckpt'
+    # checkpoint_path = 'mcpas_without_alpha/version_21/checkpoints/_ckpt_epoch_31.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_50/checkpoints/_ckpt_epoch_19.ckpt'
     # with alpha
     # checkpoint_path = 'mcpas_with_alpha/version_2/checkpoints/_ckpt_epoch_31.ckpt'
@@ -240,7 +255,23 @@ if __name__ == '__main__':
     hparams = Namespace(**args)
     checkpoint = checkpoint_path
     model = load_model(hparams, checkpoint)
-    diabetes_test_set(model)
+    # diabetes_test_set(model)
+    train_pickle = model.dataset + '_train_samples.pickle'
+    test_pickle = model.dataset + '_test_samples.pickle'
+    datafiles = train_pickle, test_pickle
+    # spb(model, datafiles, peptide='LPRRSGAAGA')
+    # spb(model, datafiles, peptide='GILGFVFTL')
+    # spb(model, datafiles, peptide='NLVPMVATV')
+    # spb(model, datafiles, peptide='GLCTLVAML')
+    # spb(model, datafiles, peptide='SSYRRPVGI')
+    d_peps = list(Sampler.get_diabetes_peptides('data/McPAS-TCR.csv'))
+    for pep in d_peps:
+        try:
+            print(pep)
+            spb_with_more_negatives(model, datafiles, peptide=pep)
+        except ValueError:
+            pass
+
     pass
 
 # it should be easy because the datasets are fixed and the model is saved in a lightning checkpoint

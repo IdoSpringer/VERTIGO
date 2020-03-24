@@ -103,14 +103,24 @@ class DiabetesDataset(SignedPairsDataset):
 
 
 class SinglePeptideDataset(SignedPairsDataset):
-    def __init__(self, samples, peptide, force_peptide=False):
+    def __init__(self, samples, peptide, force_peptide=False, spb_force=False):
         super().__init__(samples)
         self.amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
         self.atox = {amino: index for index, amino in enumerate(['PAD'] + self.amino_acids + ['X'])}
         if force_peptide:
-            # we do it only for MPS and we have to check that the signs are correct
-            pep_data = (peptide, 'mhc', 'protein')
-            self.data = [(pair[0], pep_data, pair[-1]) for pair in samples]
+            if spb_force:
+                pep_data = (peptide, 'mhc', 'protein')
+                self.data = []
+                for pair in samples:
+                    if pair[1][0] != peptide:
+                        self.data.append((pair[0], pep_data, 0))
+                    # we keep the original positives
+                    else:
+                        self.data.append(pair)
+            else:
+                # we do it only for MPS and we have to check that the signs are correct
+                pep_data = (peptide, 'mhc', 'protein')
+                self.data = [(pair[0], pep_data, pair[-1]) for pair in samples]
         else:
             self.data = [pair for pair in samples if pair[1][0] == peptide]
 
