@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import random
 import pickle
-
+import time
 
 def read_data(datafile, file_key):
     amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
@@ -12,53 +12,62 @@ def read_data(datafile, file_key):
     if file_key == 'mcpas':
         data = pd.read_csv(datafile, engine='python')
         for index in range(len(data)):
-            tcr = data['CDR3.alpha.aa'][index]
-            tcrb = data['CDR3.beta.aa'][index]
-            v = data['TRBV'][index]
-            j = data['TRBJ'][index]
-            peptide = data['Epitope.peptide'][index]
-            protein = data['Antigen.protein'][index]
-            mhc = data['MHC'][index]
-            if invalid(tcrb) or invalid(peptide):
+            sample = {}
+            sample['tcra'] = data['CDR3.alpha.aa'][index]
+            sample['tcrb'] = data['CDR3.beta.aa'][index]
+            sample['va'] = data['TRAV'][index]
+            sample['ja'] = data['TRAJ'][index]
+            sample['vb'] = data['TRBV'][index]
+            sample['jb'] = data['TRBJ'][index]
+            sample['t_cell_type'] = data['T.Cell.Type'][index]
+            sample['peptide'] = data['Epitope.peptide'][index]
+            sample['protein'] = data['Antigen.protein'][index]
+            sample['mhc'] = data['MHC'][index]
+            if invalid(sample['tcrb']) or invalid(sample['peptide']):
                 continue
-            if invalid(tcra):
-                tcra = 'UNK'
-            tcr_data = (tcra, tcrb, v, j)
-            pep_data = (peptide, mhc, protein)
-            all_pairs.append((tcr_data, pep_data))
+            if invalid(sample['tcra']):
+                sample['tcra'] = 'UNK'
+            all_pairs.append(sample)
     elif file_key == 'vdjdb':
         data = pd.read_csv(datafile, engine='python', sep='\t')
         # first read all TRB, then unite with TRA according to sample id
         paired = {}
         for index in range(len(data)):
+            sample = {}
             id = int(data['complex.id'][index])
             type = data['Gene'][index]
             tcr = data['CDR3'][index]
             if type == 'TRB':
-                tcrb = tcr
-                v = data['V'][index]
-                j = data['J'][index]
-                peptide = data['Epitope'][index]
-                protein = data['Epitope gene'][index]
-                mhc = data['MHC A'][index]
-                if invalid(tcrb) or invalid(peptide):
+                sample['tcrb'] = tcr
+                sample['tcra'] = 'UNK'
+                sample['va'] = 'UNK'
+                sample['ja'] = 'UNK'
+                sample['vb'] = data['V'][index]
+                sample['jb'] = data['J'][index]
+                sample['peptide'] = data['Epitope'][index]
+                sample['protein'] = data['Epitope gene'][index]
+                sample['mhc'] = data['MHC A'][index]
+                # here it's mhc class
+                sample['t_cell_type'] = data['MHC class'][index]
+                if invalid(tcr) or invalid(sample['peptide']):
                     continue
-                tcr_data = ('UNK', tcrb, v, j)
-                pep_data = (peptide, mhc, protein)
                 # only TRB
                 if id == 0:
-                    all_pairs.append((tcr_data, pep_data))
+                    all_pairs.append(sample)
                 else:
-                    paired[id] = (list(tcr_data), pep_data)
+                    paired[id] = sample
             if type == 'TRA':
                 tcra = tcr
                 if invalid(tcra):
                     tcra = 'UNK'
-                tcr_data, pep_data = paired[id]
-                tcr_data[0] = tcra
-                paired[id] = (tuple(tcr_data), pep_data)
+                sample = paired[id]
+                sample['va'] = data['V'][index]
+                sample['ja'] = data['J'][index]
+                sample['tcra'] = tcra
+                paired[id] = sample
         all_pairs.extend(list(paired.values()))
-    train_pairs, test_pairs = train_test_split(set(all_pairs))
+    # assimung each sample appears only once in the dataset
+    train_pairs, test_pairs = train_test_split(all_pairs)
     return all_pairs, train_pairs, test_pairs
 
 
@@ -79,39 +88,50 @@ def train_test_split(all_pairs):
 
 
 def positive_examples(pairs):
-    examples = []
-    for pair in pairs:
-        tcr_data, pep_data = pair
-        examples.append((tcr_data, pep_data, 1))
-    return examples
+    pos_samples = []
+    for sample in pairs:
+        sample['sign'] = 1
+        pos_samples.append(sample)
+    return pos_samples
 
-
-def is_negative(all_pairs, tcrb, pep):
-    for pair in all_pairs:
-        tcr_data, pep_data = pair
-        if tcr_data[1] == tcrb and pep_data[0] == pep:
-            return False
-    return True
+# Removing this function - assuming every (tcrb,pep) pair appears only once in a dataset
+# def is_negative(all_pairs, tcrb, pep):
+#     for sample in all_pairs:
+#         # we do not check for full sample match, this is enough
+#         if sample['tcrb'] == tcrb and sample['peptide'] == pep:
+#             return False
+#     return True
 
 
 def negative_examples(pairs, all_pairs, size):
     '''
     Randomly creating intentional negative examples from the same pairs dataset.
+    We match randomly tcr data with peptide data to make a sample
     '''
-    examples = []
+    neg_samples = []
     i = 0
-    # Get tcr and peps lists
-    tcrs = [tcr_data for (tcr_data, pep_data) in pairs]
-    peps = [pep_data for (tcr_data, pep_data) in pairs]
+    # tcrs = [tcr_data for (tcr_data, pep_data) in pairs]
+    # peps = [pep_data for (tcr_data, pep_data) in pairs]
     while i < size:
-        # for j in range(5):
-        pep_data = random.choice(peps)
-        tcr_data = random.choice(tcrs)
-        if is_negative(all_pairs, tcr_data[1], pep_data[0]) and \
-                (tcr_data, pep_data, 0) not in examples:
-                examples.append((tcr_data, pep_data, 0))
+        # choose randomly two samples. match tcr data with pep data
+        pep_sample = random.choice(pairs)
+        tcr_sample = random.choice(pairs)
+        sample = {}
+        sample['tcra'] = tcr_sample['tcra']
+        sample['tcrb'] = tcr_sample['tcrb']
+        sample['va'] = tcr_sample['va']
+        sample['ja'] = tcr_sample['ja']
+        sample['vb'] = tcr_sample['vb']
+        sample['jb'] = tcr_sample['jb']
+        sample['t_cell_type'] = tcr_sample['t_cell_type']
+        sample['peptide'] = pep_sample['peptide']
+        sample['protein'] = pep_sample['protein']
+        sample['mhc'] = pep_sample['mhc']
+        if sample not in all_pairs and sample not in neg_samples:
+                sample['sign'] = 0
+                neg_samples.append(sample)
                 i += 1
-    return examples
+    return neg_samples
 
 
 def get_examples(datafile, file_key):
@@ -134,9 +154,16 @@ def sample_data(datafile, file_key, train_file, test_file):
     with open(str(test_file) + '.pickle', 'wb') as handle:
         pickle.dump(test, handle)
 
-
+# t1 = time.time()
+# print('sampling mcpas...')
 # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_train_samples', 'mcpas_test_samples')
+# t2 = time.time()
+# print('done in ' + str(t2 - t1) + ' seconds')
+# t1 = time.time()
+# print('sampling vdjdb...')
 # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_train_samples', 'vdjdb_test_samples')
+# t2 = time.time()
+# print('done in ' + str(t2 - t1) + ' seconds')
 
 # Notice the different negative sampling - 5 random pairs instead of 5 random TCRs per random peptide
 
@@ -152,3 +179,13 @@ def get_diabetes_peptides(datafile):
         if pathology == 'Diabetes Type 1':
             d_peps.add(peptide)
     return d_peps
+
+
+def check():
+    with open('mcpas_train_samples.pickle', 'rb') as handle:
+        train = pickle.load(handle)
+    print(len(train))
+    print(random.choice(train))
+    pass
+
+check()
