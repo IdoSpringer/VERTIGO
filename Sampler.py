@@ -4,6 +4,7 @@ import random
 import pickle
 import time
 
+
 def read_data(datafile, file_key):
     amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
     all_pairs = []
@@ -188,4 +189,5 @@ def check():
     print(random.choice(train))
     pass
 
-check()
+
+# check()
