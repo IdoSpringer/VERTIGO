@@ -6,27 +6,20 @@ from Sampler import get_diabetes_peptides
 import pandas as pd
 import math
 
+# another problem - standatization of v,j,mhc format (mainly in mcpas)
+
 
 class SignedPairsDataset(Dataset):
-    def __init__(self, samples):
+    def __init__(self, samples, train_dicts):
         self.data = samples
         self.amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
         self.atox = {amino: index for index, amino in enumerate(['PAD'] + self.amino_acids + ['X'])}
-        self.all_va = [sample['va'] for sample in samples if not pd.isna(sample['va'])]
-        self.vatox = {va: index for index, va in enumerate(set(self.all_va), 1)}
-        self.vatox['UNK'] = 0
-        self.all_vb = [sample['vb'] for sample in samples if not pd.isna(sample['vb'])]
-        self.vbtox = {vb: index for index, vb in enumerate(set(self.all_vb), 1)}
-        self.vbtox['UNK'] = 0
-        self.all_ja = [sample['ja'] for sample in samples if not pd.isna(sample['ja'])]
-        self.jatox = {ja: index for index, ja in enumerate(set(self.all_ja), 1)}
-        self.jatox['UNK'] = 0
-        self.all_jb = [sample['jb'] for sample in samples if not pd.isna(sample['jb'])]
-        self.jbtox = {jb: index for index, jb in enumerate(set(self.all_jb), 1)}
-        self.jbtox['UNK'] = 0
-        self.all_mhc = [sample['mhc'] for sample in samples if not pd.isna(sample['mhc'])]
-        self.mhctox = {mhc: index for index, mhc in enumerate(set(self.all_mhc), 1)}
-        self.mhctox['UNK'] = 0
+        vatox, vbtox, jatox, jbtox, mhctox = train_dicts
+        self.vatox = vatox
+        self.vbtox = vbtox
+        self.jatox = jatox
+        self.jbtox = jbtox
+        self.mhctox = mhctox
 
     def __len__(self):
         return len(self.data)
@@ -93,39 +86,41 @@ class SignedPairsDataset(Dataset):
         # TCRs
         tcrb = [self.aa_convert(sample['tcrb']) for sample in batch]
         tcra = [self.aa_convert(sample['tcra']) for sample in batch]
-        if tcr_encoding == 'ae':
+        if tcr_encoding == 'AE':
             lst.append(torch.FloatTensor(self.seq_one_hot_encoding(tcra, max_len=34)))
             lst.append(torch.FloatTensor(self.seq_one_hot_encoding(tcrb)))
-        elif tcr_encoding == 'lstm':
+        elif tcr_encoding == 'LSTM':
             lst.append(torch.LongTensor(self.seq_letter_encoding(tcra)))
-            len_a = [len(a) for a in tcra]
-            lst.append(torch.LongTensor(len_a))
+            # we do not sent the length, so that ae and lstm batch output be similar
+            # len_a = [len(a) for a in tcra]
+            # lst.append(torch.LongTensor(len_a))
             lst.append(torch.LongTensor(self.seq_letter_encoding(tcrb)))
-            len_b = [len(b) for b in tcrb]
-            lst.append(torch.LongTensor(len_b))
+            # len_b = [len(b) for b in tcrb]
+            # lst.append(torch.LongTensor(len_b))
         # Peptide
         peptide = [self.aa_convert(sample['peptide']) for sample in batch]
         lst.append(torch.LongTensor(self.seq_letter_encoding(peptide)))
-        len_p = [len(p) for p in peptide]
-        lst.append(torch.LongTensor(len_p))
+        # len_p = [len(p) for p in peptide]
+        # lst.append(torch.LongTensor(len_p))
         # Categorical features - V alpha, V beta, J alpha, J beta, MHC
         categorical = ['va', 'vb', 'ja', 'jb', 'mhc']
         cat_idx = [self.vatox, self.vbtox, self.jatox, self.jbtox, self.mhctox]
         for cat, idx in zip(categorical, cat_idx):
             batch_cat = ['UNK' if pd.isna(sample[cat]) else sample[cat] for sample in batch]
-            batch_idx = list(map(lambda x: idx[x], batch_cat))
+            batch_idx = list(map(lambda x: idx[x] if x in idx else 0, batch_cat))
             # print(cat)
             if cat_encoding == 'embedding':
                 # label encoding
-                batch_cat = batch_idx
+                batch_cat = torch.LongTensor(batch_idx)
             if cat_encoding == 'binary':
                 # we need a matrix for the batch with the binary encodings
-                max_len = int(math.log(len(idx), 2)) + 1
-
+                # max_len = int(math.log(len(idx), 2)) + 1
+                # hyperparam ?
+                max_len = 10
                 def bin_pad(num, _max_len):
                     bin_list = self.binarize(num)
                     return [0] * (_max_len - len(bin_list)) + bin_list
-                bin_mat = torch.tensor([bin_pad(v, max_len) for v in batch_idx])
+                bin_mat = torch.tensor([bin_pad(v, max_len) for v in batch_idx]).float()
                 batch_cat = bin_mat
             lst.append(batch_cat)
         # T cell type
@@ -138,6 +133,26 @@ class SignedPairsDataset(Dataset):
         return lst
 
     pass
+
+
+def get_index_dicts(train_samples):
+    samples = train_samples
+    all_va = [sample['va'] for sample in samples if not pd.isna(sample['va'])]
+    vatox = {va: index for index, va in enumerate(set(all_va), 1)}
+    vatox['UNK'] = 0
+    all_vb = [sample['vb'] for sample in samples if not pd.isna(sample['vb'])]
+    vbtox = {vb: index for index, vb in enumerate(set(all_vb), 1)}
+    vbtox['UNK'] = 0
+    all_ja = [sample['ja'] for sample in samples if not pd.isna(sample['ja'])]
+    jatox = {ja: index for index, ja in enumerate(set(all_ja), 1)}
+    jatox['UNK'] = 0
+    all_jb = [sample['jb'] for sample in samples if not pd.isna(sample['jb'])]
+    jbtox = {jb: index for index, jb in enumerate(set(all_jb), 1)}
+    jbtox['UNK'] = 0
+    all_mhc = [sample['mhc'] for sample in samples if not pd.isna(sample['mhc'])]
+    mhctox = {mhc: index for index, mhc in enumerate(set(all_mhc), 1)}
+    mhctox['UNK'] = 0
+    return [vatox, vbtox, jatox, jbtox, mhctox]
 
 
 class DiabetesDataset(SignedPairsDataset):
@@ -191,20 +206,7 @@ def check():
     for batch in dataloader:
         pass
         print(batch)
-        # tcr length (including X, 0 for missing)
-        # print(torch.sum(batch[0][0]).item())
-        # tcra, tcrb, peps, pep_lens, sign, weight = batch
-        # len_a = torch.sum(tcra, dim=[1, 2])
-        # missing = (len_a == 0).nonzero(as_tuple=True)
-        # print(missing)
-        # full = len_a.nonzero(as_tuple=True)
-        # print(full)
-        # tcra_batch_ful = (tcra[full],)
-        # tcrb_batch_ful = (tcrb[full],)
-        # tcrb_batch_mis = (tcrb[missing],)
-        # tcr_batch_ful = (tcra_batch_ful, tcrb_batch_ful)
-        # tcr_batch_mis = (None, tcrb_batch_mis)
         exit()
 
 
-check()
+# check()
