@@ -244,8 +244,8 @@ if __name__ == '__main__':
     # chack diabetes with different weight factor
     # checkpoint_path = 'mcpas_without_alpha/version_8/checkpoints/_ckpt_epoch_35.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_5/checkpoints/_ckpt_epoch_40.ckpt'
-    checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
-    # checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
+    # checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
+    checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_21/checkpoints/_ckpt_epoch_31.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_50/checkpoints/_ckpt_epoch_19.ckpt'
     # with alpha
@@ -255,23 +255,22 @@ if __name__ == '__main__':
     hparams = Namespace(**args)
     checkpoint = checkpoint_path
     model = load_model(hparams, checkpoint)
-    # diabetes_test_set(model)
-    train_pickle = model.dataset + '_train_samples.pickle'
-    test_pickle = model.dataset + '_test_samples.pickle'
-    datafiles = train_pickle, test_pickle
+    diabetes_test_set(model)
+    # train_pickle = model.dataset + '_train_samples.pickle'
+    # test_pickle = model.dataset + '_test_samples.pickle'
+    # datafiles = train_pickle, test_pickle
     # spb(model, datafiles, peptide='LPRRSGAAGA')
     # spb(model, datafiles, peptide='GILGFVFTL')
     # spb(model, datafiles, peptide='NLVPMVATV')
     # spb(model, datafiles, peptide='GLCTLVAML')
     # spb(model, datafiles, peptide='SSYRRPVGI')
-    d_peps = list(Sampler.get_diabetes_peptides('data/McPAS-TCR.csv'))
-    for pep in d_peps:
-        try:
-            print(pep)
-            spb_with_more_negatives(model, datafiles, peptide=pep)
-        except ValueError:
-            pass
-
+    # d_peps = list(Sampler.get_diabetes_peptides('data/McPAS-TCR.csv'))
+    # for pep in d_peps:
+    #     try:
+    #         print(pep)
+    #         spb_with_more_negatives(model, datafiles, peptide=pep)
+    #     except ValueError:
+    #         pass
     pass
 
 # it should be easy because the datasets are fixed and the model is saved in a lightning checkpoint

@@ -8,7 +8,6 @@ import pickle
 from Sampler import get_diabetes_peptides
 from argparse import Namespace
 
-# todo distributions of diabetes peptides
 # diabetes positive TCRS, NA, random
 # peptides from mcpas and 4 from karen
 
@@ -67,7 +66,6 @@ class DiabetesTestDataset(SignedPairsDataset):
         all_pairs.extend([t for t in list(paired.values()) if t is not None and t[0][1]])
         # train_pairs, test_pairs = train_test_split(set(all_pairs))
         # all is test at this point
-        # todo we can add sign here, as what is positive in the csv column (some test)
         self.data = list(set(all_pairs))
 
     def __len__(self):

@@ -5,7 +5,7 @@ import pickle
 import time
 
 
-def read_data(datafile, file_key):
+def read_data(datafile, file_key, human=True):
     amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
     all_pairs = []
     def invalid(seq):
@@ -25,6 +25,8 @@ def read_data(datafile, file_key):
             sample['protein'] = data['Antigen.protein'][index]
             sample['mhc'] = data['MHC'][index]
             if invalid(sample['tcrb']) or invalid(sample['peptide']):
+                continue
+            if human and data['Species'][index] != 'Human':
                 continue
             if invalid(sample['tcra']):
                 sample['tcra'] = 'UNK'
@@ -135,8 +137,8 @@ def negative_examples(pairs, all_pairs, size):
     return neg_samples
 
 
-def get_examples(datafile, file_key):
-    all_pairs, train_pairs, test_pairs = read_data(datafile, file_key)
+def get_examples(datafile, file_key, human):
+    all_pairs, train_pairs, test_pairs = read_data(datafile, file_key, human)
     train_pos = positive_examples(train_pairs)
     test_pos = positive_examples(test_pairs)
     train_neg = negative_examples(train_pairs, all_pairs, 5 * len(train_pos))
@@ -148,8 +150,8 @@ def get_examples(datafile, file_key):
     return train, test
 
 
-def sample_data(datafile, file_key, train_file, test_file):
-    train, test = get_examples(datafile, file_key)
+def sample_data(datafile, file_key, train_file, test_file, human=True):
+    train, test = get_examples(datafile, file_key, human)
     with open(str(train_file) + '.pickle', 'wb') as handle:
         pickle.dump(train, handle)
     with open(str(test_file) + '.pickle', 'wb') as handle:
@@ -165,6 +167,13 @@ def sample_data(datafile, file_key, train_file, test_file):
 # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_train_samples', 'vdjdb_test_samples')
 # t2 = time.time()
 # print('done in ' + str(t2 - t1) + ' seconds')
+
+# t1 = time.time()
+# print('sampling human mcpas...')
+# sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_human_train_samples', 'mcpas_human_test_samples', human=True)
+# t2 = time.time()
+# print('done in ' + str(t2 - t1) + ' seconds')
+
 
 # Notice the different negative sampling - 5 random pairs instead of 5 random TCRs per random peptide
 

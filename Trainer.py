@@ -124,7 +124,7 @@ class ERGOLightning(pl.LightningModule):
 
     def step(self, batch):
         # batch output (always)
-        tcra, tcrb, pep, va, vb, ja, jb, mhc, sign = batch
+        tcra, tcrb, pep, va, vb, ja, jb, mhc, sign, weight = batch
         if self.tcr_encoding_model == 'LSTM':
             # get lengths for lstm functions
             len_b = torch.sum((tcrb > 0).int(), dim=1)
@@ -169,8 +169,8 @@ class ERGOLightning(pl.LightningModule):
             cat_batch = (va, vb, ja, jb, mhc)
             y_hat = self.forward(tcrb_batch, pep_batch, cat_batch).squeeze()
         y = sign
-        factor = 5
-        weight = (1 - sign + sign * factor) / (factor + 1)
+        # factor = 5
+        # weight = (1 - sign + sign * factor) / (factor + 1)
         return y, y_hat, weight
 
     def training_step(self, batch, batch_idx):
@@ -257,20 +257,22 @@ class ERGODiabetes(ERGOLightning):
         # REQUIRED
         with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
             train = pickle.load(handle)
-        train_dataset = DiabetesDataset(train, weight_factor=self.weight_factor)
-        # if self.tcr_encoding_model == 'AE':
-        #     collate_fn = train_dataset.ae_collate
-        # elif self.tcr_encoding_model == 'LSTM':
-        #     collate_fn = train_dataset.lstm_collate
-        return DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=10, collate_fn=collate_fn)
+        train_dataset = DiabetesDataset(train, get_index_dicts(train), weight_factor=self.weight_factor)
+        return DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=10,
+                          collate_fn=lambda b: train_dataset.collate(b, tcr_encoding=self.tcr_encoding_model,
+                                                                     cat_encoding=self.cat_encoding))
 
 
 def diabetes_experiment():
     parser = ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='mcpas')
+    parser.add_argument('--dataset', type=str, default='mcpas_human')
     parser.add_argument('--tcr_encoding_model', type=str, default='LSTM')
+    parser.add_argument('--cat_encoding', type=str, default='embedding')
     parser.add_argument('--use_alpha', type=bool, default=True)
-    parser.add_argument('--embedding_dim', type=int, default=10)
+    parser.add_argument('--use_vj', type=bool, default=True)
+    parser.add_argument('--use_mhc', type=bool, default=True)
+    parser.add_argument('--aa_embedding_dim', type=int, default=10)
+    parser.add_argument('--cat_embedding_dim', type=int, default=10)
     parser.add_argument('--lstm_dim', type=int, default=500)
     parser.add_argument('--encoding_dim', type=int, default=100)
     parser.add_argument('--dropout', type=float, default=0.1)
@@ -279,8 +281,7 @@ def diabetes_experiment():
     hparams = parser.parse_args()
     model = ERGODiabetes(hparams)
     # logger = TensorBoardLogger("diabetes_logs", name="d_mcpas_lstm_with_alpha")
-    logger = TensorBoardLogger("diabetes_logs", name="d_mcpas_ae_without_alpha")
-
+    logger = TensorBoardLogger("diabetes_logs", name="ergo_ii_diabetes", version=0)
     early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
     trainer = Trainer(gpus=[4], logger=logger, early_stop_callback=early_stop_callback)
     trainer.fit(model)
@@ -288,7 +289,7 @@ def diabetes_experiment():
 
 def ergo_ii_experiment():
     parser = ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='vdjdb')
+    parser.add_argument('--dataset', type=str, default='mcpas_human')
     parser.add_argument('--tcr_encoding_model', type=str, default='LSTM')
     parser.add_argument('--cat_encoding', type=str, default='embedding')
     parser.add_argument('--use_alpha', type=bool, default=True)
@@ -304,15 +305,15 @@ def ergo_ii_experiment():
     # logger = TensorBoardLogger("ERGO-II_logs", name="mcpas_ae_with_alpha")
     # logger = TensorBoardLogger("ERGO-II_logs", name="vdjdb_ae_with_alpha")
     # logger = TensorBoardLogger("ERGO-II_logs", name="mcpas_ae_without_alpha")
-    logger = TensorBoardLogger("ERGO-II_logs", name="V_gene_trial", version=1)
+    logger = TensorBoardLogger("ERGO-II_logs", name="V_gene_trial", version='mcpas_human')
     early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
-    trainer = Trainer(gpus=[2], logger=logger, early_stop_callback=early_stop_callback)
+    trainer = Trainer(gpus=[1], logger=logger, early_stop_callback=early_stop_callback)
     trainer.fit(model)
 
 
 if __name__ == '__main__':
-    ergo_ii_experiment()
-    # diabetes_experiment()
+    # ergo_ii_experiment()
+    diabetes_experiment()
     pass
 
 

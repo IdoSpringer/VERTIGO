@@ -4,6 +4,7 @@ import collections
 import pickle
 from Sampler import get_diabetes_peptides
 import pandas as pd
+import numpy as np
 import math
 
 # another problem - standatization of v,j,mhc format (mainly in mcpas)
@@ -20,12 +21,19 @@ class SignedPairsDataset(Dataset):
         self.jatox = jatox
         self.jbtox = jbtox
         self.mhctox = mhctox
+        self.pos_weight_factor = 5
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         sample = self.data[index]
+        sign = sample['sign']
+        if sign == 0:
+            weight = 1
+        elif sign == 1:
+            weight = 5
+        sample['weight'] = weight
         return sample
 
     def aa_convert(self, seq):
@@ -128,10 +136,13 @@ class SignedPairsDataset(Dataset):
         # Sign
         sign = [sample['sign'] for sample in batch]
         lst.append(torch.FloatTensor(sign))
-        # weight will be handled in trainer (it is not loader job)
+        factor = self.pos_weight_factor
+        weight = [sample['weight'] for sample in batch]
+        lst.append(torch.FloatTensor(weight))
+        # weight will be handled in trainer (it is not loader job) -
+        # It is - this is how we mark diabetes to get heavier weight
         # lst.append(torch.FloatTensor(weight))
         return lst
-
     pass
 
 
@@ -156,19 +167,18 @@ def get_index_dicts(train_samples):
 
 
 class DiabetesDataset(SignedPairsDataset):
-    def __init__(self, samples, weight_factor):
-        super().__init__(samples)
+    def __init__(self, samples, train_dicts, weight_factor):
+        super().__init__(samples, train_dicts)
         self.diabetes_peptides = get_diabetes_peptides('data/McPAS-TCR.csv')
         self.weight_factor = weight_factor
 
     def __getitem__(self, index):
-        sample = list(super().__getitem__(index))
-        weight = sample[-1]
-        tcr_data, pep_data, sign = self.data[index]
-        peptide, mhc, protein = pep_data
+        sample = super().__getitem__(index)
+        weight = sample['weight']
+        peptide = sample['peptide']
         if peptide in self.diabetes_peptides:
             weight *= self.weight_factor
-        return tuple(sample[:-1] + [weight])
+        return sample
     pass
 
 
@@ -196,17 +206,32 @@ class SinglePeptideDataset(SignedPairsDataset):
 
 
 def check():
-    with open('mcpas_train_samples.pickle', 'rb') as handle:
+    with open('mcpas_human_train_samples.pickle', 'rb') as handle:
         train = pickle.load(handle)
-    train_dataset = SignedPairsDataset(train)
-    # train_dataset = DiabetesDataset(train, weight_factor=10)
-    dataloader = DataLoader(train_dataset, batch_size=10, shuffle=False, num_workers=4,
+    with open('mcpas_human_test_samples.pickle', 'rb') as handle:
+        test = pickle.load(handle)
+    dicts = get_index_dicts(train)
+    vatox, vbtox, jatox, jbtox, mhctox = dicts
+    # print(len(vatox))
+    # for v in vatox:
+    #     print(v)
+    # train_dataset = SignedPairsDataset(train, dicts)
+    test_dataset = SignedPairsDataset(test, dicts)
+
+    train_dataset = DiabetesDataset(train, dicts, weight_factor=10)
+    train_dataloader = DataLoader(train_dataset, batch_size=10, shuffle=False, num_workers=4,
                             collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='lstm',
                                                                        cat_encoding='embedding'))
-    for batch in dataloader:
+    for batch in train_dataloader:
         pass
-        print(batch)
-        exit()
-
+        # print(batch)
+        # exit()
+    test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=4,
+                                  collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='lstm',
+                                                                             cat_encoding='embedding'))
+    for batch in test_dataloader:
+        pass
+        # print(batch)
+    print('successful')
 
 # check()
