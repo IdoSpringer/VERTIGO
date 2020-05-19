@@ -15,6 +15,8 @@ from argparse import ArgumentParser
 
 # keep up the good work :)
 
+# todo train auc in tensorboard
+# todo fix AE problem
 
 class ERGOLightning(pl.LightningModule):
 
@@ -34,6 +36,8 @@ class ERGOLightning(pl.LightningModule):
         self.lstm_dim = hparams.lstm_dim
         self.encoding_dim = hparams.encoding_dim
         self.dropout = hparams.dropout
+        self.lr = hparams.lr
+        self.wd = hparams.wd
         # get train indicies for V,J etc
         if self.cat_encoding == 'embedding':
             with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
@@ -208,7 +212,7 @@ class ERGOLightning(pl.LightningModule):
         # REQUIRED
         # can return multiple optimizers and learning_rate schedulers
         # (LBFGS it is automatically supported, no need for closure function)
-        return torch.optim.Adam(self.parameters(), lr=1e-4)
+        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
 
     @pl.data_loader
     def train_dataloader(self):
@@ -311,9 +315,35 @@ def ergo_ii_experiment():
     trainer.fit(model)
 
 
+def ergo_ii_tuning():
+    parser = ArgumentParser()
+    parser.add_argument('--version', type=int)
+    parser.add_argument('--gpu', type=int)
+    parser.add_argument('--dataset', type=str, default='mcpas_tuning')
+    parser.add_argument('--use_alpha', type=bool, default=True)
+    parser.add_argument('--use_vj', type=bool, default=True)
+    parser.add_argument('--use_mhc', type=bool, default=True)
+    parser.add_argument('--tcr_encoding_model', type=str, default='LSTM')
+    parser.add_argument('--cat_encoding', type=str, default='embedding')
+    parser.add_argument('--aa_embedding_dim', type=int, default=10)
+    parser.add_argument('--cat_embedding_dim', type=int, default=10)
+    parser.add_argument('--lstm_dim', type=int, default=500)
+    parser.add_argument('--encoding_dim', type=int, default=100)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--wd', type=float, default=0)
+    parser.add_argument('--dropout', type=float, default=0.1)
+    hparams = parser.parse_args()
+    model = ERGOLightning(hparams)
+    logger = TensorBoardLogger("ERGO-II_tuning", name="ergo_model", version=hparams.version)
+    early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
+    trainer = Trainer(gpus=[hparams.gpu], logger=logger, early_stop_callback=early_stop_callback)
+    trainer.fit(model)
+
+
 if __name__ == '__main__':
     # ergo_ii_experiment()
-    diabetes_experiment()
+    # diabetes_experiment()
+    ergo_ii_tuning()
     pass
 
 

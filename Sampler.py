@@ -174,6 +174,20 @@ def sample_data(datafile, file_key, train_file, test_file, human=True):
 # t2 = time.time()
 # print('done in ' + str(t2 - t1) + ' seconds')
 
+#
+# t1 = time.time()
+# print('sampling human mcpas...')
+# sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_tuning_train_samples', 'mcpas_tuning_test_samples', human=True)
+# t2 = time.time()
+# print('done in ' + str(t2 - t1) + ' seconds')
+# t1 = time.time()
+# print('sampling vdjdb...')
+# sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_tuning_train_samples', 'vdjdb_tuning_test_samples')
+# t2 = time.time()
+# print('done in ' + str(t2 - t1) + ' seconds')
+
+
+# todo sample united dataset
 
 # Notice the different negative sampling - 5 random pairs instead of 5 random TCRs per random peptide
 
