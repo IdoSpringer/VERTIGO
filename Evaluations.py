@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 import random
 import pickle
-from Loader import SignedPairsDataset, SinglePeptideDataset
-from Trainer import ERGOLightning
+from Loader import SignedPairsDataset, SinglePeptideDataset, get_index_dicts
+from Trainer import ERGOLightning, ERGODiabetes
 from pytorch_lightning import Trainer
 from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning.logging import TensorBoardLogger
@@ -12,8 +12,8 @@ from argparse import Namespace
 from argparse import ArgumentParser
 import torch
 import Sampler
-
-# todo all tests suggested in ERGO
+import csv
+import pandas as pd
 #  TPP-I
 #  TPP-II
 #  TPP-III
@@ -22,7 +22,6 @@ import Sampler
 #  MPS
 # all test today
 # then we could check a trained model and compare tests to first ERGO paper
-
 
 
 def get_new_tcrs_and_peps(datafiles):
@@ -52,16 +51,20 @@ def get_tpp_ii_pairs(datafiles):
     return [t for t in test_data if t[0][1] in new_test_tcrbs]
 
 
-def load_model(hparams, checkpoint_path):
+def load_model(hparams, checkpoint_path, diabetes=False):
     # args = {'dataset': 'mcpas', 'tcr_encoding_model': 'LSTM', 'use_alpha': False,
     #         'embedding_dim': 10, 'lstm_dim': 500, 'encoding_dim': 'none', 'dropout': 0.1}
     # hparams = Namespace(**args)
     # model = ERGOLightning(hparams)
     # model.load_from_checkpoint('checkpoint_trial/version_4/checkpoints/_ckpt_epoch_27.ckpt')
-    model = ERGOLightning(hparams)
+    if diabetes:
+        model = ERGODiabetes(hparams)
+    else:
+        model = ERGOLightning(hparams)
     checkpoint = torch.load(checkpoint_path, map_location='cuda:1')
     model.load_state_dict(checkpoint['state_dict'])
     # model.load_from_checkpoint('checkpoint')
+    model.eval()
     return model
 
 
@@ -222,6 +225,78 @@ def diabetes_test_set(model):
     pass
 
 
+def read_known_specificity_test(testfile):
+    amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
+    all_pairs = []
+    def invalid(seq):
+        return pd.isna(seq) or any([aa not in amino_acids for aa in seq])
+    data = pd.read_csv(testfile, engine='python')
+    for index in range(len(data)):
+        sample = {}
+        sample['tcra'] = data['junction_alpha'][index]
+        sample['tcrb'] = data['junction_beta'][index]
+        sample['va'] = data['v_gene_alpha'][index]
+        sample['ja'] = data['j_gene_alpha'][index]
+        sample['vb'] = data['v_gene_beta'][index]
+        sample['jb'] = data['j_gene_beta'][index]
+        sample['t_cell_type'] = 'UNK'
+        sample['peptide'] = 'pep'
+        sample['protein'] = 'protein'
+        sample['mhc'] = 'UNK'
+        if invalid(sample['tcrb']):
+            continue
+        if invalid(sample['tcra']):
+            sample['tcra'] = 'UNK'
+        # we do not use sign and weight, but it has to be defined
+        sample['sign'] = 0
+        sample['weight'] = 1
+        all_pairs.append(sample)
+    return all_pairs
+
+
+# blind test (known specificity)
+def diabetes_mps(hparams, model, testfile, pep_pool):
+    with open('mcpas_human_train_samples.pickle', 'rb') as handle:
+        train = pickle.load(handle)
+    train_dicts = get_index_dicts(train)
+    if pep_pool == 4:
+        peptide_map = {'IGRPp39': 'QLYHFLQIPTHEEHLFYVLS',
+                       'GADp70': 'KVNFFRMVISNPAATHQDID',
+                       'GADp15': 'DVMNILLQYVVKSFDRSTKV',
+                       'IGRPp31': 'KWCANPDWIHIDTTPFAGLV'}
+    else:
+        peptide_map = {}
+        with open(pep_pool, 'r') as file:
+            file.readline()
+            for line in file:
+                pep, index, protein = line.strip().split(',')
+                if protein in ['GAD', 'IGRP', 'Insulin']:
+                    protein += 'p'
+                pep_name = protein + index
+                peptide_map[pep_name] = pep
+    samples = read_known_specificity_test(testfile)
+    preds = np.zeros((len(samples), len(peptide_map)))
+    key_order = []
+    for pep_idx, pep in enumerate(peptide_map):
+        key_order.append(pep)
+        testset = SinglePeptideDataset(samples, train_dicts, peptide_map[pep],
+                                       force_peptide=True, spb_force=False)
+        loader = DataLoader(testset, batch_size=10, shuffle=False, num_workers=10,
+                            collate_fn=lambda b: testset.collate(b, tcr_encoding=hparams.tcr_encoding_model,
+                                                                 cat_encoding=hparams.cat_encoding))
+        outputs = []
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(loader):
+                model.eval()
+                outputs.append(model.validation_step(batch, batch_idx))
+        y_hat = torch.cat([x['y_hat'].detach().cpu() for x in outputs])
+        preds[:, pep_idx] = y_hat
+    argmax = np.argmax(preds, axis=1)
+    predicted_peps = [key_order[i] for i in argmax]
+    print(predicted_peps)
+    pass
+
+
 def mps():
     # today
     # try diabetes single cell (will probably fail but lets try)
@@ -245,17 +320,33 @@ if __name__ == '__main__':
     # checkpoint_path = 'mcpas_without_alpha/version_8/checkpoints/_ckpt_epoch_35.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_5/checkpoints/_ckpt_epoch_40.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_10/checkpoints/_ckpt_epoch_46.ckpt'
-    checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
+    # checkpoint_path = 'mcpas_without_alpha/version_20/checkpoints/_ckpt_epoch_63.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_21/checkpoints/_ckpt_epoch_31.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_50/checkpoints/_ckpt_epoch_19.ckpt'
     # with alpha
     # checkpoint_path = 'mcpas_with_alpha/version_2/checkpoints/_ckpt_epoch_31.ckpt'
-    args = {'dataset': 'mcpas', 'tcr_encoding_model': 'LSTM', 'use_alpha': False,
-            'embedding_dim': 10, 'lstm_dim': 500, 'encoding_dim': 'none', 'dropout': 0.1}
+    # with v, j , mhc
+    # checkpoint_path = 'ergo_ii_diabetes/version_5/checkpoints/_ckpt_epoch_52.ckpt'
+    # checkpoint_path = 'ergo_ii_diabetes/version_10/checkpoints/_ckpt_epoch_36.ckpt'
+    checkpoint_path = 'ergo_ii_diabetes/version_20/checkpoints/_ckpt_epoch_40.ckpt'
+    version = 20
+    weight_factor = version
+    args = {'version': version, 'gpu': 1,
+            'dataset': 'mcpas_human', 'tcr_encoding_model': 'AE', 'cat_encoding': 'embedding',
+            'use_alpha': True, 'use_vj': True, 'use_mhc': True,
+            'aa_embedding_dim': 10, 'cat_embedding_dim': 50,
+            'lstm_dim': 500, 'encoding_dim': 100,
+            'lr': 1e-4, 'wd': 0,
+            'dropout': 0.1,
+            'weight_factor': weight_factor}
+
     hparams = Namespace(**args)
     checkpoint = checkpoint_path
-    model = load_model(hparams, checkpoint)
-    diabetes_test_set(model)
+    model = load_model(hparams, checkpoint, diabetes=True)
+    # diabetes_test_set(model)
+    diabetes_mps(hparams, model, 'diabetes_data/known_specificity.csv', 'diabetes_data/28pep_pool.csv')
+    # diabetes_mps(hparams, model, 'diabetes_data/known_specificity.csv', pep_pool=4)
+
     # train_pickle = model.dataset + '_train_samples.pickle'
     # test_pickle = model.dataset + '_test_samples.pickle'
     # datafiles = train_pickle, test_pickle

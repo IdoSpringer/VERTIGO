@@ -6,6 +6,7 @@ from Sampler import get_diabetes_peptides
 import pandas as pd
 import numpy as np
 import math
+# from collections import
 
 # another problem - standatization of v,j,mhc format (mainly in mcpas)
 
@@ -149,19 +150,19 @@ class SignedPairsDataset(Dataset):
 def get_index_dicts(train_samples):
     samples = train_samples
     all_va = [sample['va'] for sample in samples if not pd.isna(sample['va'])]
-    vatox = {va: index for index, va in enumerate(set(all_va), 1)}
+    vatox = {va: index for index, va in enumerate(sorted(set(all_va)), 1)}
     vatox['UNK'] = 0
     all_vb = [sample['vb'] for sample in samples if not pd.isna(sample['vb'])]
-    vbtox = {vb: index for index, vb in enumerate(set(all_vb), 1)}
+    vbtox = {vb: index for index, vb in enumerate(sorted(set(all_vb)), 1)}
     vbtox['UNK'] = 0
     all_ja = [sample['ja'] for sample in samples if not pd.isna(sample['ja'])]
-    jatox = {ja: index for index, ja in enumerate(set(all_ja), 1)}
+    jatox = {ja: index for index, ja in enumerate(sorted(set(all_ja)), 1)}
     jatox['UNK'] = 0
     all_jb = [sample['jb'] for sample in samples if not pd.isna(sample['jb'])]
-    jbtox = {jb: index for index, jb in enumerate(set(all_jb), 1)}
+    jbtox = {jb: index for index, jb in enumerate(sorted(set(all_jb)), 1)}
     jbtox['UNK'] = 0
     all_mhc = [sample['mhc'] for sample in samples if not pd.isna(sample['mhc'])]
-    mhctox = {mhc: index for index, mhc in enumerate(set(all_mhc), 1)}
+    mhctox = {mhc: index for index, mhc in enumerate(sorted(set(all_mhc)), 1)}
     mhctox['UNK'] = 0
     return [vatox, vbtox, jatox, jbtox, mhctox]
 
@@ -183,26 +184,31 @@ class DiabetesDataset(SignedPairsDataset):
 
 
 class SinglePeptideDataset(SignedPairsDataset):
-    def __init__(self, samples, peptide, force_peptide=False, spb_force=False):
-        super().__init__(samples)
+    def __init__(self, samples, train_dicts, peptide, force_peptide=False, spb_force=False):
+        super().__init__(samples, train_dicts)
         self.amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
         self.atox = {amino: index for index, amino in enumerate(['PAD'] + self.amino_acids + ['X'])}
-        if force_peptide:
-            if spb_force:
-                pep_data = (peptide, 'mhc', 'protein')
-                self.data = []
-                for pair in samples:
-                    if pair[1][0] != peptide:
-                        self.data.append((pair[0], pep_data, 0))
-                    # we keep the original positives
-                    else:
-                        self.data.append(pair)
+        self.force_peptide = force_peptide
+        self.spb_force = spb_force
+        self.peptide = peptide
+
+    def __getitem__(self, index):
+        sample = self.data[index]
+        if self.force_peptide:
+            # we keep the original positives, else is negatives
+            if self.spb_force:
+                if sample['peptide'] != self.peptide:
+                    sample['sign'] = 0
+                return sample
+            # we do it only for MPS (and we have to check the true peptide)
             else:
-                # we do it only for MPS and we have to check that the signs are correct
-                pep_data = (peptide, 'mhc', 'protein')
-                self.data = [(pair[0], pep_data, pair[-1]) for pair in samples]
+                sample['peptide'] = self.peptide
+                return sample
         else:
-            self.data = [pair for pair in samples if pair[1][0] == peptide]
+            # original spb task
+            if sample['peptide'] != self.peptide:
+                return None
+    pass
 
 
 def check():
