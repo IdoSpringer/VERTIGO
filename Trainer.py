@@ -29,6 +29,7 @@ class ERGOLightning(pl.LightningModule):
         self.use_alpha = hparams.use_alpha
         self.use_vj = hparams.use_vj
         self.use_mhc = hparams.use_mhc
+        self.use_t_type = hparams.use_t_type
         self.cat_encoding = hparams.cat_encoding
         # Dimensions
         self.aa_embedding_dim = hparams.aa_embedding_dim
@@ -40,7 +41,7 @@ class ERGOLightning(pl.LightningModule):
         self.wd = hparams.wd
         # get train indicies for V,J etc
         if self.cat_encoding == 'embedding':
-            with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
+            with open('Samples/' + self.dataset + '_train_samples.pickle', 'rb') as handle:
                 train = pickle.load(handle)
             vatox, vbtox, jatox, jbtox, mhctox = get_index_dicts(train)
             self.v_vocab_size = len(vatox) + len(vbtox)
@@ -74,6 +75,8 @@ class ERGOLightning(pl.LightningModule):
             mlp_input_size += 2 * self.cat_embedding_dim
         if self.use_mhc:
             mlp_input_size += self.cat_embedding_dim
+        if self.use_t_type:
+            mlp_input_size += 1
         # MLP I (without alpha)
         self.mlp_dim1 = mlp_input_size
         self.hidden_layer1 = nn.Linear(self.mlp_dim1, int(np.sqrt(self.mlp_dim1)))
@@ -89,7 +92,7 @@ class ERGOLightning(pl.LightningModule):
             self.hidden_layer2 = nn.Linear(self.mlp_dim2, int(np.sqrt(self.mlp_dim2)))
             self.output_layer2 = nn.Linear(int(np.sqrt(self.mlp_dim2)), 1)
 
-    def forward(self, tcr_batch, pep_batch, cat_batch):
+    def forward(self, tcr_batch, pep_batch, cat_batch, t_type_batch):
         # PEPTIDE Encoder:
         pep_encoding = self.pep_encoder(*pep_batch)
         # TCR Encoder:
@@ -97,44 +100,49 @@ class ERGOLightning(pl.LightningModule):
         tcrb_encoding = self.tcrb_encoder(*tcrb)
         # Categorical Encoding:
         va, vb, ja, jb, mhc = cat_batch
+        # T cell type
+        t_type = t_type_batch.view(len(t_type_batch), 1)
+        # gather all features, int linear mlp so the order does not matter
+        mlp_input = [tcrb_encoding, pep_encoding]
         if self.use_vj:
             if self.cat_encoding == 'embedding':
                 va = self.v_embedding(va)
                 vb = self.v_embedding(vb)
                 ja = self.j_embedding(ja)
                 jb = self.j_embedding(jb)
-        else:
-            for cat in [va, vb, ja, jb]:
-                cat = torch.zeros(cat.size())
+            mlp_input += [vb, jb]
         if self.use_mhc:
             if self.cat_encoding == 'embedding':
                 mhc = self.mhc_embedding(mhc)
-        else:
-            mhc = torch.zeros(mhc.size())
+            mlp_input += [mhc]
+        if self.use_t_type:
+            mlp_input += [t_type]
         if tcra:
             tcra_encoding = self.tcra_encoder(*tcra)
+            mlp_input += [tcra_encoding]
+            if self.use_vj:
+                mlp_input += [va, ja]
             # MLP II Classifier
-            concat = torch.cat([tcra_encoding, tcrb_encoding, pep_encoding,
-                                va, vb, ja, jb, mhc], 1)
+            concat = torch.cat(mlp_input, 1)
             hidden_output = self.dropout(self.relu(self.hidden_layer2(concat)))
             mlp_output = self.output_layer2(hidden_output)
         else:
             # MLP I Classifier
-            tcr_pep_concat = torch.cat([tcrb_encoding, pep_encoding, vb, jb, mhc], 1)
-            hidden_output = self.dropout(self.relu(self.hidden_layer1(tcr_pep_concat)))
+            concat = torch.cat(mlp_input, 1)
+            hidden_output = self.dropout(self.relu(self.hidden_layer1(concat)))
             mlp_output = self.output_layer1(hidden_output)
         output = torch.sigmoid(mlp_output)
         return output
 
     def step(self, batch):
         # batch output (always)
-        tcra, tcrb, pep, va, vb, ja, jb, mhc, sign, weight = batch
+        tcra, tcrb, pep, va, vb, ja, jb, mhc, t_type, sign, weight = batch
         if self.tcr_encoding_model == 'LSTM':
             # get lengths for lstm functions
             len_b = torch.sum((tcrb > 0).int(), dim=1)
             len_a = torch.sum((tcra > 0).int(), dim=1)
         if self.tcr_encoding_model == 'AE':
-            len_a = torch.sum(tcra, dim=[1, 2])
+            len_a = torch.sum(tcra, dim=[1, 2]) - 1
         len_p = torch.sum((pep > 0).int(), dim=1)
         if self.use_alpha:
             missing = (len_a == 0).nonzero(as_tuple=True)
@@ -157,7 +165,8 @@ class ERGOLightning(pl.LightningModule):
                 cat_mis = (va[missing], vb[missing],
                            ja[missing], jb[missing],
                            mhc[missing])
-                y_hat_mis = self.forward(tcr_batch_mis, pep_mis, cat_mis).squeeze()
+                t_type_mis = t_type[missing]
+                y_hat_mis = self.forward(tcr_batch_mis, pep_mis, cat_mis, t_type_mis).squeeze()
                 y_hat[missing] = y_hat_mis
             # there are samples with alpha
             if len(full[0]):
@@ -165,16 +174,18 @@ class ERGOLightning(pl.LightningModule):
                 cat_ful = (va[full], vb[full],
                            ja[full], jb[full],
                            mhc[full])
-                y_hat_ful = self.forward(tcr_batch_ful, pep_ful, cat_ful).squeeze()
+                t_type_ful = t_type[full]
+                y_hat_ful = self.forward(tcr_batch_ful, pep_ful, cat_ful, t_type_ful).squeeze()
                 y_hat[full] = y_hat_ful
         else:
-            tcrb_batch = (None, (tcrb,))
+            if self.tcr_encoding_model == 'LSTM':
+                tcrb_batch = (None, (tcrb, len_b))
+            elif self.tcr_encoding_model == 'AE':
+                tcrb_batch = (None, (tcrb,))
             pep_batch = (pep, len_p)
             cat_batch = (va, vb, ja, jb, mhc)
-            y_hat = self.forward(tcrb_batch, pep_batch, cat_batch).squeeze()
+            y_hat = self.forward(tcrb_batch, pep_batch, cat_batch, t_type).squeeze()
         y = sign
-        # factor = 5
-        # weight = (1 - sign + sign * factor) / (factor + 1)
         return y, y_hat, weight
 
     def training_step(self, batch, batch_idx):
@@ -217,13 +228,9 @@ class ERGOLightning(pl.LightningModule):
     @pl.data_loader
     def train_dataloader(self):
         # REQUIRED
-        with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
+        with open('Samples/' + self.dataset + '_train_samples.pickle', 'rb') as handle:
             train = pickle.load(handle)
         train_dataset = SignedPairsDataset(train, get_index_dicts(train))
-        # if self.tcr_encoding_model == 'AE':
-        #     collate_fn = train_dataset.ae_collate
-        # elif self.tcr_encoding_model == 'LSTM':
-        #     collate_fn = train_dataset.lstm_collate
         return DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=10,
                           collate_fn=lambda b: train_dataset.collate(b, tcr_encoding=self.tcr_encoding_model,
                                                                      cat_encoding=self.cat_encoding))
@@ -231,15 +238,11 @@ class ERGOLightning(pl.LightningModule):
     @pl.data_loader
     def val_dataloader(self):
         # OPTIONAL
-        with open(self.dataset + '_test_samples.pickle', 'rb') as handle:
+        with open('Samples/' + self.dataset + '_test_samples.pickle', 'rb') as handle:
             test = pickle.load(handle)
-        with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
+        with open('Samples/' + self.dataset + '_train_samples.pickle', 'rb') as handle:
             train = pickle.load(handle)
         test_dataset = SignedPairsDataset(test, get_index_dicts(train))
-        # if self.tcr_encoding_model == 'AE':
-        #     collate_fn = test_dataset.ae_collate
-        # elif self.tcr_encoding_model == 'LSTM':
-        #     collate_fn = test_dataset.lstm_collate
         return DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=10,
                           collate_fn=lambda b: test_dataset.collate(b, tcr_encoding=self.tcr_encoding_model,
                                                                      cat_encoding=self.cat_encoding))
@@ -297,25 +300,46 @@ def diabetes_experiment():
 
 def ergo_ii_experiment():
     parser = ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='mcpas_human')
-    parser.add_argument('--tcr_encoding_model', type=str, default='LSTM')
+    parser.add_argument('iter', type=int)
+    parser.add_argument('gpu', type=int)
+    parser.add_argument('dataset', type=str, help='mcpas_human or vdjdb')
+    parser.add_argument('tcr_encoding_model', type=str, help='LSTM or AE')
     parser.add_argument('--cat_encoding', type=str, default='embedding')
-    parser.add_argument('--use_alpha', type=bool, default=True)
-    parser.add_argument('--use_vj', type=bool, default=True)
-    parser.add_argument('--use_mhc', type=bool, default=True)
+    parser.add_argument('--use_alpha', action='store_true')
+    parser.add_argument('--use_vj', action='store_true')
+    parser.add_argument('--use_mhc', action='store_true')
+    parser.add_argument('--use_t_type', action='store_true')
     parser.add_argument('--aa_embedding_dim', type=int, default=10)
-    parser.add_argument('--cat_embedding_dim', type=int, default=10)
-    parser.add_argument('--lstm_dim', type=int, default=500)
+    parser.add_argument('--cat_embedding_dim', type=int, default=50)
+    parser.add_argument('--lstm_dim', type=int, default=300)
     parser.add_argument('--encoding_dim', type=int, default=100)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--wd', type=float, default=0)
     parser.add_argument('--dropout', type=float, default=0.1)
     hparams = parser.parse_args()
     model = ERGOLightning(hparams)
-    # logger = TensorBoardLogger("ERGO-II_logs", name="mcpas_ae_with_alpha")
-    # logger = TensorBoardLogger("ERGO-II_logs", name="vdjdb_ae_with_alpha")
-    # logger = TensorBoardLogger("ERGO-II_logs", name="mcpas_ae_without_alpha")
-    logger = TensorBoardLogger("ERGO-II_logs", name="V_gene_trial", version='mcpas_human')
+    # version flags
+    version = ''
+    version += str(hparams.iter)
+    if hparams.dataset == 'mcpas_human':
+        version += 'm'
+    elif hparams.dataset == 'vdjdb':
+        version += 'v'
+    if hparams.tcr_encoding_model == 'AE':
+        version += 'e'
+    elif hparams.tcr_encoding_model == 'LSTM':
+        version += 'l'
+    if hparams.use_alpha:
+        version += 'a'
+    if hparams.use_vj:
+        version += 'j'
+    if hparams.use_mhc:
+        version += 'h'
+    if hparams.use_t_type:
+        version += 't'
+    logger = TensorBoardLogger("ERGO-II_paper_logs", name="paper_models", version=version)
     early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
-    trainer = Trainer(gpus=[1], logger=logger, early_stop_callback=early_stop_callback)
+    trainer = Trainer(gpus=[hparams.gpu], logger=logger, early_stop_callback=early_stop_callback)
     trainer.fit(model)
 
 
@@ -345,10 +369,12 @@ def ergo_ii_tuning():
 
 
 if __name__ == '__main__':
-    # ergo_ii_experiment()
+    ergo_ii_experiment()
     # diabetes_experiment()
-    ergo_ii_tuning()
+    # ergo_ii_tuning()
     pass
+
+
 
 
 # NOTE: fix sklearn import problem with this in terminal:

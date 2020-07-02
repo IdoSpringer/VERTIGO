@@ -157,35 +157,37 @@ def sample_data(datafile, file_key, train_file, test_file, human=True):
     with open(str(test_file) + '.pickle', 'wb') as handle:
         pickle.dump(test, handle)
 
-# t1 = time.time()
-# print('sampling mcpas...')
-# sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_train_samples', 'mcpas_test_samples')
-# t2 = time.time()
-# print('done in ' + str(t2 - t1) + ' seconds')
-# t1 = time.time()
-# print('sampling vdjdb...')
-# sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_train_samples', 'vdjdb_test_samples')
-# t2 = time.time()
-# print('done in ' + str(t2 - t1) + ' seconds')
 
-# t1 = time.time()
-# print('sampling human mcpas...')
-# sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_human_train_samples', 'mcpas_human_test_samples', human=True)
-# t2 = time.time()
-# print('done in ' + str(t2 - t1) + ' seconds')
+def sample():
+    # t1 = time.time()
+    # print('sampling mcpas...')
+    # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_train_samples', 'mcpas_test_samples')
+    # t2 = time.time()
+    # print('done in ' + str(t2 - t1) + ' seconds')
+    # t1 = time.time()
+    # print('sampling vdjdb...')
+    # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_train_samples', 'vdjdb_test_samples')
+    # t2 = time.time()
+    # print('done in ' + str(t2 - t1) + ' seconds')
 
-#
-# t1 = time.time()
-# print('sampling human mcpas...')
-# sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_tuning_train_samples', 'mcpas_tuning_test_samples', human=True)
-# t2 = time.time()
-# print('done in ' + str(t2 - t1) + ' seconds')
-# t1 = time.time()
-# print('sampling vdjdb...')
-# sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_tuning_train_samples', 'vdjdb_tuning_test_samples')
-# t2 = time.time()
-# print('done in ' + str(t2 - t1) + ' seconds')
+    # t1 = time.time()
+    # print('sampling human mcpas...')
+    # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_human_train_samples', 'mcpas_human_test_samples', human=True)
+    # t2 = time.time()
+    # print('done in ' + str(t2 - t1) + ' seconds')
 
+    #
+    # t1 = time.time()
+    # print('sampling human mcpas...')
+    # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_tuning_train_samples', 'mcpas_tuning_test_samples', human=True)
+    # t2 = time.time()
+    # print('done in ' + str(t2 - t1) + ' seconds')
+    # t1 = time.time()
+    # print('sampling vdjdb...')
+    # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_tuning_train_samples', 'vdjdb_tuning_test_samples')
+    # t2 = time.time()
+    # print('done in ' + str(t2 - t1) + ' seconds')
+    pass
 
 # todo sample united dataset
 
@@ -206,7 +208,7 @@ def get_diabetes_peptides(datafile):
 
 
 def check():
-    with open('mcpas_train_samples.pickle', 'rb') as handle:
+    with open('mcpas_human_train_samples.pickle', 'rb') as handle:
         train = pickle.load(handle)
     print(len(train))
     print(random.choice(train))
@@ -214,3 +216,4 @@ def check():
 
 
 # check()
+# sample()

@@ -101,16 +101,10 @@ class SignedPairsDataset(Dataset):
         elif tcr_encoding == 'LSTM':
             lst.append(torch.LongTensor(self.seq_letter_encoding(tcra)))
             # we do not sent the length, so that ae and lstm batch output be similar
-            # len_a = [len(a) for a in tcra]
-            # lst.append(torch.LongTensor(len_a))
             lst.append(torch.LongTensor(self.seq_letter_encoding(tcrb)))
-            # len_b = [len(b) for b in tcrb]
-            # lst.append(torch.LongTensor(len_b))
         # Peptide
         peptide = [self.aa_convert(sample['peptide']) for sample in batch]
         lst.append(torch.LongTensor(self.seq_letter_encoding(peptide)))
-        # len_p = [len(p) for p in peptide]
-        # lst.append(torch.LongTensor(len_p))
         # Categorical features - V alpha, V beta, J alpha, J beta, MHC
         categorical = ['va', 'vb', 'ja', 'jb', 'mhc']
         cat_idx = [self.vatox, self.vbtox, self.jatox, self.jbtox, self.mhctox]
@@ -123,7 +117,6 @@ class SignedPairsDataset(Dataset):
                 batch_cat = torch.LongTensor(batch_idx)
             if cat_encoding == 'binary':
                 # we need a matrix for the batch with the binary encodings
-                # max_len = int(math.log(len(idx), 2)) + 1
                 # hyperparam ?
                 max_len = 10
                 def bin_pad(num, _max_len):
@@ -132,8 +125,13 @@ class SignedPairsDataset(Dataset):
                 bin_mat = torch.tensor([bin_pad(v, max_len) for v in batch_idx]).float()
                 batch_cat = bin_mat
             lst.append(batch_cat)
-        # T cell type
-        pass
+        # T cell type (or MHC class)
+        t_type_dict = {'CD4': 2, 'CD8': 1, 'MHCII': 2, 'MHCI': 1}
+        # nan and other values are 2
+        t_type = [sample['t_cell_type'] for sample in batch]
+        convert_type = lambda x: t_type_dict[x] if x in t_type_dict else 0
+        t_type_tensor = torch.FloatTensor(list(map(convert_type, t_type)))
+        lst.append(t_type_tensor)
         # Sign
         sign = [sample['sign'] for sample in batch]
         lst.append(torch.FloatTensor(sign))
@@ -212,16 +210,17 @@ class SinglePeptideDataset(SignedPairsDataset):
 
 
 def check():
-    with open('mcpas_human_train_samples.pickle', 'rb') as handle:
+    dct = 'Samples/'
+    with open(dct + 'mcpas_human_train_samples.pickle', 'rb') as handle:
         train = pickle.load(handle)
-    with open('mcpas_human_test_samples.pickle', 'rb') as handle:
+    with open(dct + 'mcpas_human_test_samples.pickle', 'rb') as handle:
         test = pickle.load(handle)
     dicts = get_index_dicts(train)
     vatox, vbtox, jatox, jbtox, mhctox = dicts
     # print(len(vatox))
     # for v in vatox:
     #     print(v)
-    # train_dataset = SignedPairsDataset(train, dicts)
+    train_dataset = SignedPairsDataset(train, dicts)
     test_dataset = SignedPairsDataset(test, dicts)
 
     train_dataset = DiabetesDataset(train, dicts, weight_factor=10)
@@ -229,15 +228,15 @@ def check():
                             collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='lstm',
                                                                        cat_encoding='embedding'))
     for batch in train_dataloader:
-        pass
-        # print(batch)
+        print(batch)
+        break
         # exit()
     test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=4,
                                   collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='lstm',
                                                                              cat_encoding='embedding'))
     for batch in test_dataloader:
-        pass
-        # print(batch)
+        print(batch)
+        break
     print('successful')
 
 # check()
