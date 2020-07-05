@@ -1,4 +1,3 @@
-import pandas as pd
 import numpy as np
 import random
 import pickle
@@ -14,14 +13,91 @@ import torch
 import Sampler
 import csv
 import pandas as pd
-#  TPP-I
-#  TPP-II
-#  TPP-III
-# SPB       V
-#  Protein SPB
-#  MPS
-# all test today
-# then we could check a trained model and compare tests to first ERGO paper
+import os
+from os import listdir
+from os.path import isfile, join
+import sys
+
+
+def load_model(hparams, checkpoint_path, diabetes=False):
+    if diabetes:
+        model = ERGODiabetes(hparams)
+    else:
+        model = ERGOLightning(hparams)
+    checkpoint = torch.load(checkpoint_path, map_location='cuda:1')
+    model.load_state_dict(checkpoint['state_dict'])
+    model.eval()
+    return model
+
+
+def load_test(datafiles):
+    train_pickle, test_pickle = datafiles
+    with open(train_pickle, 'rb') as handle:
+        train = pickle.load(handle)
+    with open(test_pickle, 'rb') as handle:
+        test = pickle.load(handle)
+    train_dicts = get_index_dicts(train)
+    return test, train_dicts
+
+
+def true_new_pairs(args, datafiles):
+    # tpp-i slightly depends on what features were used
+    # e.g. two samples with same tcrb but different tcra
+    # if we use alpha, one can be in train and other in test
+    # if we do not use alpha, one cannot be in test
+    # but when we train with alpha, we cause train leakage... how can we handle this?
+    # we do not. if we have many samples with identical beta chain, tpp-i is not so relevant
+    train_pickle, test_pickle = datafiles
+    # open and read data
+    # return TCRs and peps that appear only in test pairs
+    with open(train_pickle, 'rb') as handle:
+        train = pickle.load(handle)
+    with open(test_pickle, 'rb') as handle:
+        test = pickle.load(handle)
+    true_test = []
+    for sample in test:
+        if sample in train:
+            continue
+        tcrb = sample['tcrb']
+        # filter sample in train that match same tcrb
+        train_candidates = list(filter(lambda _sample: _sample['tcrb'] == tcrb, train))
+        peptide = sample['peptide']
+        # filter sample in train that match same peptide
+        train_candidates = list(filter(lambda _sample: _sample['peptide'] == peptide, train_candidates))
+        if len(train_candidates) == 0:
+            true_test.append(sample)
+        else:
+            # same alpha sieve
+            if args.use_alpha:
+                tcra = sample['tcra']
+                train_candidates = list(filter(lambda _sample: _sample['tcra'] == tcra, train_candidates))
+            # same v,j sieve (all at once)
+            if args.use_vj:
+                va = sample['va']
+                vb = sample['vb']
+                ja = sample['ja']
+                jb = sample['jb']
+                train_candidates = list(filter(lambda _sample: _sample['va'] == va
+                                                and _sample['vb'] == vb
+                                                and _sample['ja'] == ja
+                                                and _sample['jb'] == jb, train_candidates))
+            # same mhc sieve
+            if args.use_mhc:
+                mhc = sample['mhc']
+                train_candidates = list(filter(lambda _sample: _sample['mhc'] == mhc, train_candidates))
+            # same t type sieve (although it is probably irrelevant)
+            if args.use_t_type:
+                t_type = sample['t_cell_type']
+                train_candidates = list(filter(lambda _sample: _sample['t_cell_type'] == t_type, train_candidates))
+            if len(train_candidates) == 0:
+                true_test.append(sample)
+            else:
+                for i in train_candidates:
+                    print(i)
+                print('sample:', sample)
+                # exit()
+    print('Done filtering test pairs!')
+    return true_test
 
 
 def get_new_tcrs_and_peps(datafiles):
@@ -32,55 +108,99 @@ def get_new_tcrs_and_peps(datafiles):
         train = pickle.load(handle)
     with open(test_pickle, 'rb') as handle:
         test = pickle.load(handle)
-    train_peps = [t[1][0] for t in train]
-    train_tcrbs = [t[0][1] for t in train]
-    test_peps = [t[1][0] for t in test]
-    test_tcrbs = [t[0][1] for t in test]
+    train_peps = [sample['peptide'] for sample in train]
+    train_tcrbs = [sample['tcrb'] for sample in train]
+    test_peps = [sample['peptide'] for sample in test]
+    test_tcrbs = [sample['tcrb'] for sample in test]
     new_test_tcrbs = set(test_tcrbs).difference(set(train_tcrbs))
     new_test_peps = set(test_peps).difference(set(train_peps))
     # print(len(set(test_tcrbs)), len(new_test_tcrbs))
     return new_test_tcrbs, new_test_peps
 
 
-def get_tpp_ii_pairs(datafiles):
-    # We only take new TCR beta chains (why? does it matter?)
-    train_pickle, test_pickle = datafiles
-    with open(test_pickle, 'rb') as handle:
-        test_data = pickle.load(handle)
-    new_test_tcrbs, new_test_peps = get_new_tcrs_and_peps(datafiles)
-    return [t for t in test_data if t[0][1] in new_test_tcrbs]
-
-
-def load_model(hparams, checkpoint_path, diabetes=False):
-    # args = {'dataset': 'mcpas', 'tcr_encoding_model': 'LSTM', 'use_alpha': False,
-    #         'embedding_dim': 10, 'lstm_dim': 500, 'encoding_dim': 'none', 'dropout': 0.1}
-    # hparams = Namespace(**args)
-    # model = ERGOLightning(hparams)
-    # model.load_from_checkpoint('checkpoint_trial/version_4/checkpoints/_ckpt_epoch_27.ckpt')
-    if diabetes:
-        model = ERGODiabetes(hparams)
+def auc_predict(model, test, train_dicts, peptide=None):
+    if peptide:
+        test_dataset = SinglePeptideDataset(test, train_dicts, peptide, force_peptide=False)
     else:
-        model = ERGOLightning(hparams)
-    checkpoint = torch.load(checkpoint_path, map_location='cuda:1')
-    model.load_state_dict(checkpoint['state_dict'])
-    # model.load_from_checkpoint('checkpoint')
-    model.eval()
-    return model
-
-
-def spb(model, datafiles, peptide):
-    test = get_tpp_ii_pairs(datafiles)
-    test_dataset = SinglePeptideDataset(test, peptide)
-    if model.tcr_encoding_model == 'AE':
-        collate_fn = test_dataset.ae_collate
-    elif model.tcr_encoding_model == 'LSTM':
-        collate_fn = test_dataset.lstm_collate
-    loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=10, collate_fn=collate_fn)
+        test_dataset = SignedPairsDataset(test, train_dicts)
+    loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=10,
+                        collate_fn=lambda b: test_dataset.collate(b, tcr_encoding=model.tcr_encoding_model,
+                                                                  cat_encoding=model.cat_encoding))
     outputs = []
     for batch_idx, batch in enumerate(loader):
         outputs.append(model.validation_step(batch, batch_idx))
     auc = model.validation_end(outputs)['val_auc']
-    print(auc)
+    return auc
+
+
+def spb(args, model, datafiles, peptide):
+    test, train_dicts = load_test(datafiles)
+    new_test_tcrbs, new_test_peps = get_new_tcrs_and_peps(datafiles)
+    test = [sample for sample in test if sample['tcrb'] in new_test_tcrbs]
+    return auc_predict(model, test, train_dicts, peptide=peptide)
+
+
+def mps(hparams, model, datafiles, peptides):
+    train_file, test_files = datafiles
+    with open(train_file, 'rb') as handle:
+        train = pickle.load(handle)
+    train_dicts = get_index_dicts(train)
+    samples = get_tpp_ii_pairs(datafiles)
+    preds = np.zeros((len(samples), len(peptides)))
+    key_order = []
+    for pep_idx, pep in enumerate(peptides):
+        key_order.append(pep)
+        testset = SinglePeptideDataset(samples, train_dicts, peptide_map[pep],
+                                       force_peptide=True, spb_force=False)
+        loader = DataLoader(testset, batch_size=64, shuffle=False, num_workers=10,
+                            collate_fn=lambda b: testset.collate(b, tcr_encoding=hparams.tcr_encoding_model,
+                                                                 cat_encoding=hparams.cat_encoding))
+        outputs = []
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(loader):
+                model.eval()
+                outputs.append(model.validation_step(batch, batch_idx))
+        y_hat = torch.cat([x['y_hat'].detach().cpu() for x in outputs])
+        preds[:, pep_idx] = y_hat
+    argmax = np.argmax(preds, axis=1)
+    predicted_peps = [key_order[i] for i in argmax]
+    # todo return accuracy
+    return predicted_peps
+
+
+def tpp_i(model, datafiles, true_test):
+    test, train_dicts = load_test(datafiles)
+    test = true_test
+    return auc_predict(model, test, train_dicts)
+
+
+def tpp_ii(model, datafiles, true_test):
+    test, train_dicts = load_test(datafiles)
+    new_test_tcrbs, new_test_peps = get_new_tcrs_and_peps(datafiles)
+    test = [sample for sample in true_test if sample['tcrb'] in new_test_tcrbs]
+    return auc_predict(model, test, train_dicts)
+
+
+def tpp_iii(model, datafiles, true_test):
+    test, train_dicts = load_test(datafiles)
+    new_test_tcrbs, new_test_peps = get_new_tcrs_and_peps(datafiles)
+    test = [sample for sample in true_test if sample['tcrb'] in new_test_tcrbs
+                                        and sample['peptide'] in new_test_peps]
+    return auc_predict(model, test, train_dicts)
+
+
+
+# def get_tpp_ii_pairs(datafiles):
+#     # We only take new TCR beta chains (why? does it matter?)
+#     train_pickle, test_pickle = datafiles
+#     with open(test_pickle, 'rb') as handle:
+#         test_data = pickle.load(handle)
+#     new_test_tcrbs, new_test_peps = get_new_tcrs_and_peps(datafiles)
+#     return [sample for sample in test_data if sample['tcrb'] in new_test_tcrbs]
+
+
+def protein_spb():
+    # todo
     pass
 
 
@@ -109,9 +229,6 @@ def spb_with_more_negatives(model, datafiles, peptide):
 
 
 def multi_peptide_score(args, model, test_data, new_tcrs, number_of_peps):
-    # take only positives from test with new TCRs
-    tcrs = [p[0] for p in test_data if p[0] in new_tcrs and p[2] == 'p']
-    targets = [p[1][0] for p in test_data if p[0] in new_tcrs and p[2] == 'p']
     # get N most frequent peps from the positives list
     peps = targets
     most_freq = []
@@ -122,18 +239,8 @@ def multi_peptide_score(args, model, test_data, new_tcrs, number_of_peps):
         # remove all its instances from list
         peps = list(filter(lambda pep: pep != freq_pep, peps))
     # print(most_freq)
-    score_matrix = np.zeros((len(tcrs), number_of_peps))
-    for i in range(number_of_peps):
-        try:
-            # predict all new test TCRs with peps 1...k
-            tcrs, _, scores = predict(args, model, tcrs, [most_freq[i]] * len(tcrs))
-            score_matrix[:, i] = scores
-        except ValueError:
-            pass
-        except IndexError:
-            pass
-        except TypeError:
-            pass
+
+
     # true peptide targets indexes
     true_pred = list(map(lambda pep: most_freq.index(pep) if pep in most_freq else number_of_peps + 1, targets))
     accs = []
@@ -297,25 +404,7 @@ def diabetes_mps(hparams, model, testfile, pep_pool):
     pass
 
 
-def mps():
-    # today
-    # try diabetes single cell (will probably fail but lets try)
-    pass
-
-
-def tpp_i():
-    pass
-
-
-def tpp_ii():
-    pass
-
-
-def tpp_iii():
-    pass
-
-
-if __name__ == '__main__':
+def diabetes_evaluations():
     # chack diabetes with different weight factor
     # checkpoint_path = 'mcpas_without_alpha/version_8/checkpoints/_ckpt_epoch_35.ckpt'
     # checkpoint_path = 'mcpas_without_alpha/version_5/checkpoints/_ckpt_epoch_40.ckpt'
@@ -328,33 +417,19 @@ if __name__ == '__main__':
     # with v, j , mhc
     # checkpoint_path = 'ergo_ii_diabetes/version_5/checkpoints/_ckpt_epoch_52.ckpt'
     # checkpoint_path = 'ergo_ii_diabetes/version_10/checkpoints/_ckpt_epoch_36.ckpt'
-    checkpoint_path = 'ergo_ii_diabetes/version_20/checkpoints/_ckpt_epoch_40.ckpt'
-    version = 20
-    weight_factor = version
-    args = {'version': version, 'gpu': 1,
-            'dataset': 'mcpas_human', 'tcr_encoding_model': 'AE', 'cat_encoding': 'embedding',
-            'use_alpha': True, 'use_vj': True, 'use_mhc': True,
-            'aa_embedding_dim': 10, 'cat_embedding_dim': 50,
-            'lstm_dim': 500, 'encoding_dim': 100,
-            'lr': 1e-4, 'wd': 0,
-            'dropout': 0.1,
-            'weight_factor': weight_factor}
-
-    hparams = Namespace(**args)
-    checkpoint = checkpoint_path
-    model = load_model(hparams, checkpoint, diabetes=True)
+    # checkpoint_path = 'ergo_ii_diabetes/version_20/checkpoints/_ckpt_epoch_40.ckpt'
+    # args = {'gpu': 1,
+    #         'dataset': 'mcpas_human', 'tcr_encoding_model': 'AE', 'cat_encoding': 'embedding',
+    #         'use_alpha': True, 'use_vj': True, 'use_mhc': True, 'use_t_type': True,
+    #         'aa_embedding_dim': 10, 'cat_embedding_dim': 50,
+    #         'lstm_dim': 300, 'encoding_dim': 100,
+    #         'lr': 1e-4, 'wd': 0,
+    #         'dropout': 0.1}
+    # version = 20
+    # weight_factor = version
     # diabetes_test_set(model)
-    diabetes_mps(hparams, model, 'diabetes_data/known_specificity.csv', 'diabetes_data/28pep_pool.csv')
+    # diabetes_mps(hparams, model, 'diabetes_data/known_specificity.csv', 'diabetes_data/28pep_pool.csv')
     # diabetes_mps(hparams, model, 'diabetes_data/known_specificity.csv', pep_pool=4)
-
-    # train_pickle = model.dataset + '_train_samples.pickle'
-    # test_pickle = model.dataset + '_test_samples.pickle'
-    # datafiles = train_pickle, test_pickle
-    # spb(model, datafiles, peptide='LPRRSGAAGA')
-    # spb(model, datafiles, peptide='GILGFVFTL')
-    # spb(model, datafiles, peptide='NLVPMVATV')
-    # spb(model, datafiles, peptide='GLCTLVAML')
-    # spb(model, datafiles, peptide='SSYRRPVGI')
     # d_peps = list(Sampler.get_diabetes_peptides('data/McPAS-TCR.csv'))
     # for pep in d_peps:
     #     try:
@@ -364,15 +439,39 @@ if __name__ == '__main__':
     #         pass
     pass
 
-# it should be easy because the datasets are fixed and the model is saved in a lightning checkpoint
-# tests might be implemented in lightning module
 
-#
-# args = {'dataset': 'mcpas', 'tcr_encoding_model': 'LSTM', 'use_alpha': False,
-#            'embedding_dim': 10, 'lstm_dim': 500, 'encoding_dim': 'none', 'dropout': 0.1}
-# hparams = Namespace(**args)
-# model = ERGOLightning(hparams)
-# logger = TensorBoardLogger("trial_logs", name="checkpoint_trial")
-# early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
-# trainer = Trainer(gpus=[2], logger=logger, early_stop_callback=early_stop_callback)
-# trainer.fit(model)
+if __name__ == '__main__':
+    # get model file from version
+    model_dir = 'paper_models/'
+    version = sys.argv[1]
+    path = model_dir + 'version_' + version + '/checkpoints'
+    files = [f for f in listdir(path) if isfile(join(path, f))]
+    checkpoint_path = path + '/' + files[0]
+    # get args from version
+    args_dir = 'ERGO-II_paper_logs/paper_models/'
+    path = args_dir + 'version_' + version + '/meta_tags.csv'
+    with open(path, 'r') as file:
+        lines = file.readlines()
+        args = {}
+        for line in lines[1:]:
+            key, value = line.strip().split(',')
+            if key in ['dataset', 'tcr_encoding_model', 'cat_encoding']:
+                args[key] = value
+            else:
+                args[key] = eval(value)
+    hparams = Namespace(**args)
+    checkpoint = checkpoint_path
+    model = load_model(hparams, checkpoint, diabetes=False)
+    train_pickle = 'Samples/' + model.dataset + '_train_samples.pickle'
+    test_pickle = 'Samples/' + model.dataset + '_test_samples.pickle'
+    datafiles = train_pickle, test_pickle
+    # print('LPRRSGAAGA spb:', spb(model, datafiles, peptide='LPRRSGAAGA'))
+    true_test = true_new_pairs(hparams, datafiles)
+    print('tpp i:', tpp_i(model, datafiles, true_test))
+    print('tpp ii:', tpp_ii(model, datafiles, true_test))
+    print('tpp iii:', tpp_iii(model, datafiles, true_test))
+    # spb(model, datafiles, peptide='GILGFVFTL')
+    # spb(model, datafiles, peptide='NLVPMVATV')
+    # spb(model, datafiles, peptide='GLCTLVAML')
+    # spb(model, datafiles, peptide='SSYRRPVGI')
+    pass

@@ -15,8 +15,6 @@ from argparse import ArgumentParser
 
 # keep up the good work :)
 
-# train auc in tensorboard ?
-
 
 class ERGOLightning(pl.LightningModule):
 
@@ -311,10 +309,10 @@ def ergo_ii_experiment():
     parser.add_argument('--use_t_type', action='store_true')
     parser.add_argument('--aa_embedding_dim', type=int, default=10)
     parser.add_argument('--cat_embedding_dim', type=int, default=50)
-    parser.add_argument('--lstm_dim', type=int, default=300)
+    parser.add_argument('--lstm_dim', type=int, default=500)
     parser.add_argument('--encoding_dim', type=int, default=100)
-    parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--wd', type=float, default=0)
+    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--wd', type=float, default=1e-5)
     parser.add_argument('--dropout', type=float, default=0.1)
     hparams = parser.parse_args()
     model = ERGOLightning(hparams)
@@ -322,9 +320,13 @@ def ergo_ii_experiment():
     version = ''
     version += str(hparams.iter)
     if hparams.dataset == 'mcpas_human':
-        version += 'm'
+        version += 'h'
     elif hparams.dataset == 'vdjdb':
         version += 'v'
+    elif hparams.dataset == 'mcpas':
+        version += 'm'
+    else:
+        version += 'x'
     if hparams.tcr_encoding_model == 'AE':
         version += 'e'
     elif hparams.tcr_encoding_model == 'LSTM':
@@ -373,8 +375,6 @@ if __name__ == '__main__':
     # diabetes_experiment()
     # ergo_ii_tuning()
     pass
-
-
 
 
 # NOTE: fix sklearn import problem with this in terminal:

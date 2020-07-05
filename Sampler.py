@@ -175,6 +175,12 @@ def sample():
     # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_human_train_samples', 'mcpas_human_test_samples', human=True)
     # t2 = time.time()
     # print('done in ' + str(t2 - t1) + ' seconds')
+    #
+    # t1 = time.time()
+    # print('sampling mcpas...')
+    # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_train_samples', 'mcpas_test_samples', human=False)
+    # t2 = time.time()
+    # print('done in ' + str(t2 - t1) + ' seconds')
 
     #
     # t1 = time.time()
