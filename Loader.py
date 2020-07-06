@@ -93,6 +93,9 @@ class SignedPairsDataset(Dataset):
     def collate(self, batch, tcr_encoding, cat_encoding):
         lst = []
         # TCRs
+        batch = list(filter(lambda x: x is not None, batch))
+        if len(batch) == 0:
+            return None
         tcrb = [self.aa_convert(sample['tcrb']) for sample in batch]
         tcra = [self.aa_convert(sample['tcra']) for sample in batch]
         if tcr_encoding == 'AE':
@@ -192,6 +195,8 @@ class SinglePeptideDataset(SignedPairsDataset):
 
     def __getitem__(self, index):
         sample = self.data[index]
+        # weight does not matter, we do not train with this dataset
+        sample['weight'] = 0
         if self.force_peptide:
             # we keep the original positives, else is negatives
             if self.spb_force:
@@ -204,8 +209,11 @@ class SinglePeptideDataset(SignedPairsDataset):
                 return sample
         else:
             # original spb task
+            # print(sample['peptide'])
             if sample['peptide'] != self.peptide:
+                # print(sample['peptide'])
                 return None
+            return sample
     pass
 
 

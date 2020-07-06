@@ -10,6 +10,7 @@ from pytorch_lightning.callbacks import EarlyStopping
 from argparse import Namespace
 from argparse import ArgumentParser
 import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 import Sampler
 import csv
 import pandas as pd
@@ -91,11 +92,11 @@ def true_new_pairs(args, datafiles):
                 train_candidates = list(filter(lambda _sample: _sample['t_cell_type'] == t_type, train_candidates))
             if len(train_candidates) == 0:
                 true_test.append(sample)
-            else:
-                for i in train_candidates:
-                    print(i)
-                print('sample:', sample)
-                # exit()
+            # else:
+            #     for i in train_candidates:
+            #         print(i)
+            #     print('sample:', sample)
+            #     # exit()
     print('Done filtering test pairs!')
     return true_test
 
@@ -123,17 +124,28 @@ def auc_predict(model, test, train_dicts, peptide=None):
         test_dataset = SinglePeptideDataset(test, train_dicts, peptide, force_peptide=False)
     else:
         test_dataset = SignedPairsDataset(test, train_dicts)
-    loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=10,
+    # print(test_dataset.data)
+    loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=0,
                         collate_fn=lambda b: test_dataset.collate(b, tcr_encoding=model.tcr_encoding_model,
                                                                   cat_encoding=model.cat_encoding))
     outputs = []
     for batch_idx, batch in enumerate(loader):
-        outputs.append(model.validation_step(batch, batch_idx))
+        output = model.validation_step(batch, batch_idx)
+        if output:
+            outputs.append(output)
     auc = model.validation_end(outputs)['val_auc']
     return auc
 
 
-def spb(args, model, datafiles, peptide):
+def spb(model, datafiles, true_test, peptide):
+    test, train_dicts = load_test(datafiles)
+    new_test_tcrbs, new_test_peps = get_new_tcrs_and_peps(datafiles)
+    test = [sample for sample in true_test if sample['tcrb'] in new_test_tcrbs]
+    return auc_predict(model, test, train_dicts, peptide=peptide)
+
+
+def unfiltered_spb(model, datafiles, peptide):
+    # spb without test filtering
     test, train_dicts = load_test(datafiles)
     new_test_tcrbs, new_test_peps = get_new_tcrs_and_peps(datafiles)
     test = [sample for sample in test if sample['tcrb'] in new_test_tcrbs]
@@ -187,7 +199,6 @@ def tpp_iii(model, datafiles, true_test):
     test = [sample for sample in true_test if sample['tcrb'] in new_test_tcrbs
                                         and sample['peptide'] in new_test_peps]
     return auc_predict(model, test, train_dicts)
-
 
 
 # def get_tpp_ii_pairs(datafiles):
@@ -465,13 +476,30 @@ if __name__ == '__main__':
     train_pickle = 'Samples/' + model.dataset + '_train_samples.pickle'
     test_pickle = 'Samples/' + model.dataset + '_test_samples.pickle'
     datafiles = train_pickle, test_pickle
-    # print('LPRRSGAAGA spb:', spb(model, datafiles, peptide='LPRRSGAAGA'))
+
+    # check auc of unfiltered spb (faster but maybe less accurate)
+    # print('LPRRSGAAGA u spb:', unfiltered_spb(model, datafiles, peptide='LPRRSGAAGA'))
+    # print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
+    # print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
+    # print('GLCTLVAML u spb:', unfiltered_spb(model, datafiles, peptide='GLCTLVAML'))
+    # print('SSYRRPVGI u spb:', unfiltered_spb(model, datafiles, peptide='SSYRRPVGI'))
+
+    print('KLGGALQAK u spb:', unfiltered_spb(model, datafiles, peptide='KLGGALQAK'))
+    print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
+    print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
+    print('AVFDRKSDAK u spb:', unfiltered_spb(model, datafiles, peptide='AVFDRKSDAK'))
+    print('RAKFKQLL u spb:', unfiltered_spb(model, datafiles, peptide='RAKFKQLL'))
+
+    # exit()
     true_test = true_new_pairs(hparams, datafiles)
-    print('tpp i:', tpp_i(model, datafiles, true_test))
-    print('tpp ii:', tpp_ii(model, datafiles, true_test))
-    print('tpp iii:', tpp_iii(model, datafiles, true_test))
-    # spb(model, datafiles, peptide='GILGFVFTL')
-    # spb(model, datafiles, peptide='NLVPMVATV')
-    # spb(model, datafiles, peptide='GLCTLVAML')
-    # spb(model, datafiles, peptide='SSYRRPVGI')
+    # TPP
+    # print('tpp i:', tpp_i(model, datafiles, true_test))
+    # print('tpp ii:', tpp_ii(model, datafiles, true_test))
+    # print('tpp iii:', tpp_iii(model, datafiles, true_test))
+    # McPAS SPB
+    # print('LPRRSGAAGA spb:', spb(model, datafiles, true_test, peptide='LPRRSGAAGA'))
+    # print('GILGFVFTL spb:', spb(model, datafiles, true_test, peptide='GILGFVFTL'))
+    # print('NLVPMVATV spb:', spb(model, datafiles, true_test, peptide='NLVPMVATV'))
+    # print('GLCTLVAML spb:', spb(model, datafiles, true_test, peptide='GLCTLVAML'))
+    # print('SSYRRPVGI spb:', spb(model, datafiles, true_test, peptide='SSYRRPVGI'))
     pass

@@ -133,6 +133,9 @@ class ERGOLightning(pl.LightningModule):
         return output
 
     def step(self, batch):
+        # batch is none (might happen in evaluation)
+        if not batch:
+            return None
         # batch output (always)
         tcra, tcrb, pep, va, vb, ja, jb, mhc, t_type, sign, weight = batch
         if self.tcr_encoding_model == 'LSTM':
@@ -197,8 +200,12 @@ class ERGOLightning(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # OPTIONAL
         self.eval()
-        y, y_hat, _ = self.step(batch)
-        return {'val_loss': F.binary_cross_entropy(y_hat, y), 'y_hat': y_hat, 'y': y}
+        if self.step(batch):
+            y, y_hat, _ = self.step(batch)
+            return {'val_loss': F.binary_cross_entropy(y_hat, y), 'y_hat': y_hat, 'y': y}
+        else:
+            return None
+
 
     def validation_end(self, outputs):
         # OPTIONAL

@@ -27,10 +27,31 @@ maybe just use full database)
 # according to the features used                                            V (working but seems useless)
 # auto args/checkpoint loading                                              V
 # 'cross validation' datasets + runs                                        - Not yet
-# start tables and plots                                                    - at least some tables today
+# start tables and plots                                                    V
 # Why do we have same samples in train and test but with the opposite sign?
 what can cause that? it is really strange                                   -
 # how can TPP-III be greater than TPP-I?                                    -
+# TPP table runs                                                            V not completed
+# do something else meantime...
+# spb (will also be slow) comparison to ergo table                          V
+# spb bugs (loading + empty batch)                                          V
+# BREAKING NEWS: when we compute SPB we do not have to filter test pairs!!!
+# perhaps also in TPP-II and TPP-III ?
+# check strange results (bugs + more runs?)                                 -
+# model pipeline figure                                                     -
+# sieving figure?                                                           -
+# length distribution
+# TCR logo (alpha + beta)
+# peptide logo for CD4 vs CD8
+# contribution of each component
+# later - contribution of positions in alpha/beta
+# standard peptides - barplot of cumulative accuracy of each component
+# (run the same on all frequent peptides and cluster peptides based on
+contribution. stats on clusters)
+# much later - yellow fever (filter tcr in test)
+# comparision to dash/tcrgp on different components
+
+
 
 
 # how many models to we need to train?
