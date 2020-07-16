@@ -101,6 +101,44 @@ def true_new_pairs(args, datafiles):
     return true_test
 
 
+def efficient_true_new_pairs(args, datafiles):
+    # tpp-i slightly depends on what features were used
+    # e.g. two samples with same tcrb but different tcra
+    # if we use alpha, one can be in train and other in test
+    # if we do not use alpha, one cannot be in test
+    # but when we train with alpha, we cause train leakage... how can we handle this?
+    # we do not. if we have many samples with identical beta chain, tpp-i is not so relevant
+    train_pickle, test_pickle = datafiles
+    # open and read data
+    # return TCRs and peps that appear only in test pairs
+    with open(train_pickle, 'rb') as handle:
+        train = pickle.load(handle)
+    with open(test_pickle, 'rb') as handle:
+        test = pickle.load(handle)
+    # first make a train dictionary
+    # all train combinations of relevant features
+    features = ['tcrb', 'peptide']
+    if args.use_alpha:
+        features += ['tcra']
+    if args.use_vj:
+        features += ['va', 'vb', 'ja', 'jb']
+    if args.use_mhc:
+        features += ['mhc']
+    if args.use_t_type:
+        features += ['t_cell_type']
+    train_sieve = {tuple(sample[f] for f in features): True for sample in train}
+    true_test = []
+    for sample in test:
+        if sample in train:
+            continue
+        if tuple(sample[f] for f in features) in train_sieve:
+            # print(sample)
+            continue
+        true_test.append(sample)
+    print('Done filtering test pairs!')
+    return true_test
+
+
 def get_new_tcrs_and_peps(datafiles):
     train_pickle, test_pickle = datafiles
     # open and read data
@@ -479,11 +517,11 @@ if __name__ == '__main__':
     datafiles = train_pickle, test_pickle
 
     # check auc of unfiltered spb (faster)
-    print('LPRRSGAAGA u spb:', unfiltered_spb(model, datafiles, peptide='LPRRSGAAGA'))
-    print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
-    print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
-    print('GLCTLVAML u spb:', unfiltered_spb(model, datafiles, peptide='GLCTLVAML'))
-    print('SSYRRPVGI u spb:', unfiltered_spb(model, datafiles, peptide='SSYRRPVGI'))
+    # print('LPRRSGAAGA u spb:', unfiltered_spb(model, datafiles, peptide='LPRRSGAAGA'))
+    # print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
+    # print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
+    # print('GLCTLVAML u spb:', unfiltered_spb(model, datafiles, peptide='GLCTLVAML'))
+    # print('SSYRRPVGI u spb:', unfiltered_spb(model, datafiles, peptide='SSYRRPVGI'))
 
     # print('KLGGALQAK u spb:', unfiltered_spb(model, datafiles, peptide='KLGGALQAK'))
     # print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
@@ -491,12 +529,12 @@ if __name__ == '__main__':
     # print('AVFDRKSDAK u spb:', unfiltered_spb(model, datafiles, peptide='AVFDRKSDAK'))
     # print('RAKFKQLL u spb:', unfiltered_spb(model, datafiles, peptide='RAKFKQLL'))
 
-    exit()
-    true_test = true_new_pairs(hparams, datafiles)
+    # exit()
+    true_test = efficient_true_new_pairs(hparams, datafiles)
     # TPP
-    # print('tpp i:', tpp_i(model, datafiles, true_test))
-    # print('tpp ii:', tpp_ii(model, datafiles, true_test))
-    # print('tpp iii:', tpp_iii(model, datafiles, true_test))
+    print('tpp i:', tpp_i(model, datafiles, true_test))
+    print('tpp ii:', tpp_ii(model, datafiles, true_test))
+    print('tpp iii:', tpp_iii(model, datafiles, true_test))
     # McPAS SPB
     # print('LPRRSGAAGA spb:', spb(model, datafiles, true_test, peptide='LPRRSGAAGA'))
     # print('GILGFVFTL spb:', spb(model, datafiles, true_test, peptide='GILGFVFTL'))
