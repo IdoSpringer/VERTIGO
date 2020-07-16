@@ -202,16 +202,15 @@ class ERGOLightning(pl.LightningModule):
         self.eval()
         if self.step(batch):
             y, y_hat, _ = self.step(batch)
-            return {'val_loss': F.binary_cross_entropy(y_hat, y), 'y_hat': y_hat, 'y': y}
+            return {'val_loss': F.binary_cross_entropy(y_hat.view(-1, 1), y.view(-1, 1)), 'y_hat': y_hat, 'y': y}
         else:
             return None
-
 
     def validation_end(self, outputs):
         # OPTIONAL
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        y = torch.cat([x['y'] for x in outputs])
-        y_hat = torch.cat([x['y_hat'] for x in outputs])
+        y = torch.cat([x['y'].view(-1, 1) for x in outputs])
+        y_hat = torch.cat([x['y_hat'].view(-1, 1) for x in outputs])
         # auc = roc_auc_score(y.cpu(), y_hat.cpu())
         auc = roc_auc_score(y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
         print(auc)

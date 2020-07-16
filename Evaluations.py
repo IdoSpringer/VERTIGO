@@ -133,6 +133,7 @@ def auc_predict(model, test, train_dicts, peptide=None):
         output = model.validation_step(batch, batch_idx)
         if output:
             outputs.append(output)
+            # print(output['y'])
     auc = model.validation_end(outputs)['val_auc']
     return auc
 
@@ -477,20 +478,20 @@ if __name__ == '__main__':
     test_pickle = 'Samples/' + model.dataset + '_test_samples.pickle'
     datafiles = train_pickle, test_pickle
 
-    # check auc of unfiltered spb (faster but maybe less accurate)
-    # print('LPRRSGAAGA u spb:', unfiltered_spb(model, datafiles, peptide='LPRRSGAAGA'))
-    # print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
-    # print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
-    # print('GLCTLVAML u spb:', unfiltered_spb(model, datafiles, peptide='GLCTLVAML'))
-    # print('SSYRRPVGI u spb:', unfiltered_spb(model, datafiles, peptide='SSYRRPVGI'))
-
-    print('KLGGALQAK u spb:', unfiltered_spb(model, datafiles, peptide='KLGGALQAK'))
+    # check auc of unfiltered spb (faster)
+    print('LPRRSGAAGA u spb:', unfiltered_spb(model, datafiles, peptide='LPRRSGAAGA'))
     print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
     print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
-    print('AVFDRKSDAK u spb:', unfiltered_spb(model, datafiles, peptide='AVFDRKSDAK'))
-    print('RAKFKQLL u spb:', unfiltered_spb(model, datafiles, peptide='RAKFKQLL'))
+    print('GLCTLVAML u spb:', unfiltered_spb(model, datafiles, peptide='GLCTLVAML'))
+    print('SSYRRPVGI u spb:', unfiltered_spb(model, datafiles, peptide='SSYRRPVGI'))
 
-    # exit()
+    # print('KLGGALQAK u spb:', unfiltered_spb(model, datafiles, peptide='KLGGALQAK'))
+    # print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
+    # print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
+    # print('AVFDRKSDAK u spb:', unfiltered_spb(model, datafiles, peptide='AVFDRKSDAK'))
+    # print('RAKFKQLL u spb:', unfiltered_spb(model, datafiles, peptide='RAKFKQLL'))
+
+    exit()
     true_test = true_new_pairs(hparams, datafiles)
     # TPP
     # print('tpp i:', tpp_i(model, datafiles, true_test))
