@@ -329,6 +329,8 @@ def ergo_ii_experiment():
         version += 'h'
     elif hparams.dataset == 'vdjdb':
         version += 'v'
+    elif hparams.dataset == 'vdjdb_no10x':
+        version += 'f'
     elif hparams.dataset == 'mcpas':
         version += 'm'
     else:
@@ -385,6 +387,6 @@ if __name__ == '__main__':
 
 # NOTE: fix sklearn import problem with this in terminal:
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/dsi/speingi/anaconda3/lib/
-
+# or just conda activate dgx
 # see logs
 # tensorboard --logdir dir

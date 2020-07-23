@@ -490,17 +490,27 @@ def diabetes_evaluations():
     pass
 
 
-if __name__ == '__main__':
+def spb_main(version, data_key):
     # get model file from version
-    model_dir = 'paper_models/'
-    version = sys.argv[1]
-    path = model_dir + 'version_' + version + '/checkpoints'
-    files = [f for f in listdir(path) if isfile(join(path, f))]
-    checkpoint_path = path + '/' + files[0]
+    model_dir = 'paper_models'
+    logs_dir = 'ERGO-II_paper_logs'
+    checkpoint_path1 = os.path.join(model_dir, 'version_' + version, 'checkpoints')
+    checkpoint_path2 = os.path.join(logs_dir, checkpoint_path1)
+    try:
+        files = [f for f in listdir(checkpoint_path1) if isfile(join(checkpoint_path1, f))]
+        checkpoint_path = checkpoint_path1
+    except FileNotFoundError:
+        files = [f for f in listdir(checkpoint_path2) if isfile(join(checkpoint_path2, f))]
+        checkpoint_path = checkpoint_path2
+    checkpoint_path = os.path.join(checkpoint_path, files[0])
     # get args from version
-    args_dir = 'ERGO-II_paper_logs/paper_models/'
-    path = args_dir + 'version_' + version + '/meta_tags.csv'
-    with open(path, 'r') as file:
+    args_path1 = os.path.join(logs_dir, model_dir, 'version_' + version)
+    args_path2 = os.path.join(logs_dir, model_dir, version)
+    if isfile(os.path.join(args_path1, 'meta_tags.csv')):
+        args_path = os.path.join(args_path1, 'meta_tags.csv')
+    elif isfile(os.path.join(args_path2, 'meta_tags.csv')):
+        args_path = os.path.join(args_path2, 'meta_tags.csv')
+    with open(args_path, 'r') as file:
         lines = file.readlines()
         args = {}
         for line in lines[1:]:
@@ -516,29 +526,69 @@ if __name__ == '__main__':
     test_pickle = 'Samples/' + model.dataset + '_test_samples.pickle'
     datafiles = train_pickle, test_pickle
 
-    # check auc of unfiltered spb (faster)
-    # print('LPRRSGAAGA u spb:', unfiltered_spb(model, datafiles, peptide='LPRRSGAAGA'))
-    # print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
-    # print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
-    # print('GLCTLVAML u spb:', unfiltered_spb(model, datafiles, peptide='GLCTLVAML'))
-    # print('SSYRRPVGI u spb:', unfiltered_spb(model, datafiles, peptide='SSYRRPVGI'))
+    spb_results = []
+    if data_key == 'mcpas':
+        freq_peps = Sampler.frequent_peptides('data/McPAS-TCR.csv', 'mcpas', 20)
+        # print(freq_peps)
+        for pep in freq_peps:
+            # print(pep + ' spb:', unfiltered_spb(model, datafiles, peptide=pep))
+            spb_results.append(unfiltered_spb(model, datafiles, peptide=pep))
+    return spb_results
 
-    # print('KLGGALQAK u spb:', unfiltered_spb(model, datafiles, peptide='KLGGALQAK'))
-    # print('GILGFVFTL u spb:', unfiltered_spb(model, datafiles, peptide='GILGFVFTL'))
-    # print('NLVPMVATV u spb:', unfiltered_spb(model, datafiles, peptide='NLVPMVATV'))
-    # print('AVFDRKSDAK u spb:', unfiltered_spb(model, datafiles, peptide='AVFDRKSDAK'))
-    # print('RAKFKQLL u spb:', unfiltered_spb(model, datafiles, peptide='RAKFKQLL'))
 
-    # exit()
+def tpp_main(version):
+    # get model file from version
+    model_dir = 'paper_models'
+    logs_dir = 'ERGO-II_paper_logs'
+    checkpoint_path1 = os.path.join(model_dir, 'version_' + version, 'checkpoints')
+    checkpoint_path2 = os.path.join(logs_dir, checkpoint_path1)
+    try:
+        files = [f for f in listdir(checkpoint_path1) if isfile(join(checkpoint_path1, f))]
+        checkpoint_path = checkpoint_path1
+    except FileNotFoundError:
+        files = [f for f in listdir(checkpoint_path2) if isfile(join(checkpoint_path2, f))]
+        checkpoint_path = checkpoint_path2
+    checkpoint_path = os.path.join(checkpoint_path, files[0])
+    # get args from version
+    args_path1 = os.path.join(logs_dir, model_dir, 'version_' + version)
+    args_path2 = os.path.join(logs_dir, model_dir, version)
+    if isfile(os.path.join(args_path1, 'meta_tags.csv')):
+        args_path = os.path.join(args_path1, 'meta_tags.csv')
+    elif isfile(os.path.join(args_path2, 'meta_tags.csv')):
+        args_path = os.path.join(args_path2, 'meta_tags.csv')
+    with open(args_path, 'r') as file:
+        lines = file.readlines()
+        args = {}
+        for line in lines[1:]:
+            key, value = line.strip().split(',')
+            if key in ['dataset', 'tcr_encoding_model', 'cat_encoding']:
+                args[key] = value
+            else:
+                args[key] = eval(value)
+    hparams = Namespace(**args)
+    checkpoint = checkpoint_path
+    model = load_model(hparams, checkpoint, diabetes=False)
+    train_pickle = 'Samples/' + model.dataset + '_train_samples.pickle'
+    test_pickle = 'Samples/' + model.dataset + '_test_samples.pickle'
+    datafiles = train_pickle, test_pickle
     true_test = efficient_true_new_pairs(hparams, datafiles)
-    # TPP
+    TPP
     print('tpp i:', tpp_i(model, datafiles, true_test))
     print('tpp ii:', tpp_ii(model, datafiles, true_test))
     print('tpp iii:', tpp_iii(model, datafiles, true_test))
-    # McPAS SPB
-    # print('LPRRSGAAGA spb:', spb(model, datafiles, true_test, peptide='LPRRSGAAGA'))
-    # print('GILGFVFTL spb:', spb(model, datafiles, true_test, peptide='GILGFVFTL'))
-    # print('NLVPMVATV spb:', spb(model, datafiles, true_test, peptide='NLVPMVATV'))
-    # print('GLCTLVAML spb:', spb(model, datafiles, true_test, peptide='GLCTLVAML'))
-    # print('SSYRRPVGI spb:', spb(model, datafiles, true_test, peptide='SSYRRPVGI'))
+    pass
+
+
+if __name__ == '__main__':
+    # version = sys.argv[1]
+    # freq_peps = Sampler.frequent_peptides('data/McPAS-TCR.csv', 'mcpas', 20)
+    # spb_table = pd.DataFrame()
+    # for version in ['1me', '1ml', '1mea', '1mla', '1meaj', '1mlaj',
+    #                 '1meajh', '1mlajh', '1meajht', '1mlajht']:
+    #     print(version)
+    #     spb_results = spb_main(version, data_key='mcpas')
+    #     print(spb_results)
+    #     spb_table[version] = spb_results
+    # spb_table.index = freq_peps
+    # spb_table.to_csv('plots/mcpas_spb_results.csv')
     pass

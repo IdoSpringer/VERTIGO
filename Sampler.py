@@ -5,7 +5,7 @@ import pickle
 import time
 
 
-def read_data(datafile, file_key, human=True):
+def read_data(datafile, file_key, human=True, use_10x=True):
     amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
     all_pairs = []
     def invalid(seq):
@@ -40,6 +40,8 @@ def read_data(datafile, file_key, human=True):
             id = int(data['complex.id'][index])
             type = data['Gene'][index]
             tcr = data['CDR3'][index]
+            if not use_10x and '10xgenomics' in data['Reference'][index]:
+                continue
             if type == 'TRB':
                 sample['tcrb'] = tcr
                 sample['tcra'] = 'UNK'
@@ -137,8 +139,8 @@ def negative_examples(pairs, all_pairs, size):
     return neg_samples
 
 
-def get_examples(datafile, file_key, human):
-    all_pairs, train_pairs, test_pairs = read_data(datafile, file_key, human)
+def get_examples(datafile, file_key, human, use_10x):
+    all_pairs, train_pairs, test_pairs = read_data(datafile, file_key, human, use_10x)
     train_pos = positive_examples(train_pairs)
     test_pos = positive_examples(test_pairs)
     train_neg = negative_examples(train_pairs, all_pairs, 5 * len(train_pos))
@@ -150,8 +152,8 @@ def get_examples(datafile, file_key, human):
     return train, test
 
 
-def sample_data(datafile, file_key, train_file, test_file, human=True):
-    train, test = get_examples(datafile, file_key, human)
+def sample_data(datafile, file_key, train_file, test_file, human=False, use_10x=True):
+    train, test = get_examples(datafile, file_key, human, use_10x)
     with open(str(train_file) + '.pickle', 'wb') as handle:
         pickle.dump(train, handle)
     with open(str(test_file) + '.pickle', 'wb') as handle:
@@ -159,17 +161,6 @@ def sample_data(datafile, file_key, train_file, test_file, human=True):
 
 
 def sample():
-    # t1 = time.time()
-    # print('sampling mcpas...')
-    # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_train_samples', 'mcpas_test_samples')
-    # t2 = time.time()
-    # print('done in ' + str(t2 - t1) + ' seconds')
-    # t1 = time.time()
-    # print('sampling vdjdb...')
-    # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_train_samples', 'vdjdb_test_samples')
-    # t2 = time.time()
-    # print('done in ' + str(t2 - t1) + ' seconds')
-
     # t1 = time.time()
     # print('sampling human mcpas...')
     # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_human_train_samples', 'mcpas_human_test_samples', human=True)
@@ -182,17 +173,12 @@ def sample():
     # t2 = time.time()
     # print('done in ' + str(t2 - t1) + ' seconds')
 
-    #
-    # t1 = time.time()
-    # print('sampling human mcpas...')
-    # sample_data('data/McPAS-TCR.csv', 'mcpas', 'mcpas_tuning_train_samples', 'mcpas_tuning_test_samples', human=True)
-    # t2 = time.time()
-    # print('done in ' + str(t2 - t1) + ' seconds')
     # t1 = time.time()
     # print('sampling vdjdb...')
-    # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_tuning_train_samples', 'vdjdb_tuning_test_samples')
+    # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_no10x_train_samples', 'vdjdb_no10x_test_samples', use_10x=False)
     # t2 = time.time()
     # print('done in ' + str(t2 - t1) + ' seconds')
+
     pass
 
 # todo sample united dataset
@@ -213,6 +199,16 @@ def get_diabetes_peptides(datafile):
     return d_peps
 
 
+def frequent_peptides(datafile, key, k):
+    if key == 'mcpas':
+        data = pd.read_csv(datafile, engine='python')
+        freq_peps = data['Epitope.peptide'].value_counts()[:k].index.to_list()
+    elif key == 'vdjdb':
+        data = pd.read_csv(datafile, engine='python', sep='\t')
+        freq_peps = data['Epitope'].value_counts()[:k].index.to_list()
+    return freq_peps
+
+
 def check():
     with open('mcpas_human_train_samples.pickle', 'rb') as handle:
         train = pickle.load(handle)
@@ -222,4 +218,7 @@ def check():
 
 
 # check()
-# sample()
+if __name__ == '__main__':
+    # sample()
+    # frequent_peptides()
+    pass
