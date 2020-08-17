@@ -124,7 +124,8 @@ def linear_regression_coefficients(test_type):
 def spb_linear_regression_coefficients(results_file):
     results = pd.read_csv(results_file)
     peptides = results['peptide']
-    for j, peptide in enumerate(peptides):
+    avg = []
+    for j, peptide in enumerate(peptides[:-1]):
         # alpha, vj, mhc, t-type
         a = np.zeros((5, 4))
         for i in range(1, 5):
@@ -139,18 +140,28 @@ def spb_linear_regression_coefficients(results_file):
         assert len(labels) == len(reg_ae.coef_.reshape(-1, 1))
         plot_data = np.concatenate((reg_ae.coef_.reshape(-1, 1),
                                     reg_lstm.coef_.reshape(-1, 1)), axis=1)
+        avg.append(plot_data)
         plt.subplot(5, 4, j + 1)
         bplot = plt.boxplot(plot_data.T,
                             vert=True,  # vertical box alignment
                             patch_artist=True,  # fill with color
                             labels=labels),
-        # plt.title('SPB (' + str(peptide) + ') Linear Regression Coefficients')
         plt.title(str(peptide), fontdict={'fontsize': 8})
         # plt.xlabel(str(peptide))
         plt.xticks(fontsize=8)
         plt.yticks(fontsize=8)
         if j == 8:
             plt.ylabel('AUC Contribution', fontdict={'fontsize': 12})
+    avg_plot_data = np.average(avg, axis=0)
+    plt.subplot(5, 4, 20)
+    bplot = plt.boxplot(avg_plot_data.T,
+                        vert=True,  # vertical box alignment
+                        patch_artist=True,  # fill with color
+                        labels=labels),
+    plt.title('Average', fontdict={'fontsize': 8})
+    # plt.xlabel(str(peptide))
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
     # plt.tight_layout(pad=0, rect=(0,0,1,1))
     plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.5)
     plt.suptitle('McPAS SPB Linear Regression Coefficients', fontdict={'fontsize': 14})
@@ -194,10 +205,9 @@ def tpp_linear_regression_coefficients(results_file):
     plt.show()
 
 
-
 if __name__ == '__main__':
     # mhc_type_comp_logos()
     # linear_regression_coefficients('tpp')
     # linear_regression_coefficients('spb')
-    # spb_linear_regression_coefficients('mcpas_spb_results.csv')
-    tpp_linear_regression_coefficients('tpp_results.csv')
+    spb_linear_regression_coefficients('mcpas_spb_results.csv')
+    # tpp_linear_regression_coefficients('tpp_results.csv')
