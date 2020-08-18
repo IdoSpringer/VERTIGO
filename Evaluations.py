@@ -215,7 +215,7 @@ def mps(hparams, model, datafiles, peptides):
         preds[:, pep_idx] = y_hat
     argmax = np.argmax(preds, axis=1)
     predicted_peps = [key_order[i] for i in argmax]
-    # todo return accuracy
+    # need to return accuracy
     return predicted_peps
 
 
@@ -250,7 +250,6 @@ def tpp_iii(model, datafiles, true_test):
 
 
 def protein_spb():
-    # todo
     pass
 
 
@@ -533,6 +532,17 @@ def spb_main(version, data_key):
         for pep in freq_peps:
             # print(pep + ' spb:', unfiltered_spb(model, datafiles, peptide=pep))
             spb_results.append(unfiltered_spb(model, datafiles, peptide=pep))
+    elif data_key == 'vdjdb':
+        freq_peps = ['IPSINVHHY', 'TPRVTGGGAM', 'NLVPMVATV', 'GLCTLVAML',
+                     'RAKFKQLL', 'YVLDHLIVV', 'GILGFVFTL', 'PKYVKQNTLKLAT',
+                     'CINGVCWTV', 'KLVALGINAV', 'ATDALMTGY', 'RPRGEVRFL',
+                     'LLWNGPMAV', 'GTSGSPIVNR', 'GTSGSPIINR', 'KAFSPEVIPMF',
+                     'TPQDLNTML', 'EIYKRWII', 'KRWIILGLNK', 'FRDYVDRFYKTLRAEQASQE',
+                     'GPGHKARVL', 'FLKEKGGL']
+        print(freq_peps)
+        for pep in freq_peps:
+            # print(pep + ' spb:', unfiltered_spb(model, datafiles, peptide=pep))
+            spb_results.append(unfiltered_spb(model, datafiles, peptide=pep))
     return spb_results
 
 
@@ -572,7 +582,7 @@ def tpp_main(version):
     test_pickle = 'Samples/' + model.dataset + '_test_samples.pickle'
     datafiles = train_pickle, test_pickle
     true_test = efficient_true_new_pairs(hparams, datafiles)
-    TPP
+    # TPP
     print('tpp i:', tpp_i(model, datafiles, true_test))
     print('tpp ii:', tpp_ii(model, datafiles, true_test))
     print('tpp iii:', tpp_iii(model, datafiles, true_test))
@@ -581,14 +591,34 @@ def tpp_main(version):
 
 if __name__ == '__main__':
     # version = sys.argv[1]
-    # freq_peps = Sampler.frequent_peptides('data/McPAS-TCR.csv', 'mcpas', 20)
-    # spb_table = pd.DataFrame()
-    # for version in ['1me', '1ml', '1mea', '1mla', '1meaj', '1mlaj',
-    #                 '1meajh', '1mlajh', '1meajht', '1mlajht']:
-    #     print(version)
-    #     spb_results = spb_main(version, data_key='mcpas')
-    #     print(spb_results)
-    #     spb_table[version] = spb_results
-    # spb_table.index = freq_peps
-    # spb_table.to_csv('plots/mcpas_spb_results.csv')
+    # key = 'vdjdb'
+    # if key == 'mcpas':
+    #     freq_peps = Sampler.frequent_peptides('data/McPAS-TCR.csv', 'mcpas', 20)
+    #     spb_table = pd.DataFrame()
+    #     for version in ['1me', '1ml', '1mea', '1mla', '1meaj', '1mlaj',
+    #                     '1meajh', '1mlajh', '1meajht', '1mlajht']:
+    #         print(version)
+    #         spb_results = spb_main(version, data_key='mcpas')
+    #         print(spb_results)
+    #         spb_table[version] = spb_results
+    #     spb_table.index = freq_peps
+    #     spb_table.to_csv('plots/mcpas_spb_results.csv')
+    # elif key == 'vdjdb':
+    #     freq_peps = ['IPSINVHHY', 'TPRVTGGGAM', 'NLVPMVATV', 'GLCTLVAML',
+    #                  'RAKFKQLL', 'YVLDHLIVV', 'GILGFVFTL', 'PKYVKQNTLKLAT',
+    #                  'CINGVCWTV', 'KLVALGINAV', 'ATDALMTGY', 'RPRGEVRFL',
+    #                  'LLWNGPMAV', 'GTSGSPIVNR', 'GTSGSPIINR', 'KAFSPEVIPMF',
+    #                  'TPQDLNTML', 'EIYKRWII', 'KRWIILGLNK', 'FRDYVDRFYKTLRAEQASQE',
+    #                  'GPGHKARVL', 'FLKEKGGL']
+    #     spb_table = pd.DataFrame()
+    #     for version in ['1fe', '1fl', '1fea', '1fla', '1feaj', '1flaj',
+    #                     '1feajh', '1flajh', '1feajht', '1flajht']:
+    #         print(version)
+    #         spb_results = spb_main(version, data_key='vdjdb')
+    #         print(spb_results)
+    #         spb_table[version] = spb_results
+    #     spb_table.index = freq_peps
+    #     spb_table.to_csv('plots/vdjdb_spb_results.csv')
     pass
+
+# todo stats on how many alpha vs alpha + beta we have for each peptide in spb tables

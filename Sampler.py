@@ -181,7 +181,7 @@ def sample():
 
     pass
 
-# todo sample united dataset
+#  sample united dataset ?
 
 # Notice the different negative sampling - 5 random pairs instead of 5 random TCRs per random peptide
 
