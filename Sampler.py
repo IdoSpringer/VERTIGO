@@ -209,6 +209,28 @@ def frequent_peptides(datafile, key, k):
     return freq_peps
 
 
+def count_alpha_beta():
+    datafile = 'data/McPAS-TCR.csv'
+    data = pd.read_csv(datafile, engine='python')
+    freq_peps = data['Epitope.peptide'].value_counts()[:20].index.to_list()
+    has = []
+    mis = []
+    for pep in freq_peps:
+        pep_data = data[data['Epitope.peptide'] == pep]
+        pep_data = pep_data[~pd.isna(pep_data['CDR3.beta.aa'])]
+        has_alpha = len(pep_data[~pep_data['CDR3.alpha.aa'].apply(pd.isna)])
+        mis_alpha = len(pep_data[pep_data['CDR3.alpha.aa'].apply(pd.isna)])
+        assert has_alpha + mis_alpha == len(pep_data)
+        has.append(has_alpha)
+        mis.append(mis_alpha)
+        print(pep, has_alpha, mis_alpha)
+    df = pd.DataFrame()
+    df['peptide'] = freq_peps
+    df['has_alpha'] = has
+    df['mis_alpha'] = mis
+    df.to_csv('plots/alpha_beta_counts.csv', index=False)
+
+
 def check():
     with open('mcpas_human_train_samples.pickle', 'rb') as handle:
         train = pickle.load(handle)
@@ -221,4 +243,5 @@ def check():
 if __name__ == '__main__':
     # sample()
     # frequent_peptides()
+    # count_alpha_beta()
     pass
