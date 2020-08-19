@@ -185,7 +185,7 @@ def tpp_linear_regression_coefficients(results_file):
     X = a
     results = pd.read_csv(results_file, sep='\t')
     m_ae_results = results['mcpas_ae']
-    m_lstm_results = results['mcpas_ae']
+    m_lstm_results = results['mcpas_lstm']
     reg_m_ae = LinearRegression().fit(X, m_ae_results)
     reg_m_lstm = LinearRegression().fit(X, m_lstm_results)
     labels = ['TPP-I', 'TPP-II', 'TPP-III', 'TCR' + r'$\alpha$', 'V, J', 'MHC', 'T-Cell Type']
@@ -213,8 +213,11 @@ def tpp_linear_regression_coefficients(results_file):
     # print(bplot)
     # for patch, color in zip(bplot[0]['boxes'], colors):
     #     patch.set_facecolor(color)
+    plt.tight_layout()
     print(reg_m_ae.coef_)
     print(reg_m_lstm.coef_)
+    print('The standart error between the models is bounded by %.3f' %
+          max(np.std([reg_m_ae.coef_, reg_m_lstm.coef_], axis=0)))
     plt.show()
 
 
