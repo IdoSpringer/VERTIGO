@@ -146,25 +146,33 @@ def spb_linear_regression_coefficients(results_file):
                             vert=True,  # vertical box alignment
                             patch_artist=True,  # fill with color
                             labels=labels),
+        colors = ['silver', 'orchid', 'goldenrod', 'deepskyblue']
+        for patch, color in zip(bplot[0]['boxes'], colors):
+            patch.set_facecolor(color)
+        # axes = plt.gca()
+        # axes.set_ylim([-0.05, 0.3])
         plt.title(str(peptide), fontdict={'fontsize': 8})
         # plt.xlabel(str(peptide))
         plt.xticks(fontsize=8)
         plt.yticks(fontsize=8)
         if j == 8:
-            plt.ylabel('AUC Contribution', fontdict={'fontsize': 12})
+            plt.ylabel('AUC Contribution', fontdict={'fontsize': 14})
     avg_plot_data = np.average(avg, axis=0)
     plt.subplot(5, 4, 20)
     bplot = plt.boxplot(avg_plot_data.T,
                         vert=True,  # vertical box alignment
                         patch_artist=True,  # fill with color
                         labels=labels),
+    colors = ['silver', 'orchid', 'goldenrod', 'deepskyblue']
+    for patch, color in zip(bplot[0]['boxes'], colors):
+        patch.set_facecolor(color)
     plt.title('Average', fontdict={'fontsize': 8})
     # plt.xlabel(str(peptide))
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
     # plt.tight_layout(pad=0, rect=(0,0,1,1))
     plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.5)
-    plt.suptitle('McPAS SPB Linear Regression Coefficients', fontdict={'fontsize': 14})
+    plt.suptitle('McPAS SPB Linear Regression Coefficients', fontsize=16)
     plt.show()
 
 
@@ -225,5 +233,5 @@ if __name__ == '__main__':
     # mhc_type_comp_logos()
     # linear_regression_coefficients('tpp')
     # linear_regression_coefficients('spb')
-    # spb_linear_regression_coefficients('mcpas_spb_results.csv')
-    tpp_linear_regression_coefficients('tpp_results.csv')
+    spb_linear_regression_coefficients('mcpas_spb_results.csv')
+    # tpp_linear_regression_coefficients('tpp_results.csv')
