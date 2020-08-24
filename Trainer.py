@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.logging import TensorBoardLogger
 from pytorch_lightning.callbacks import EarlyStopping
-from Loader import SignedPairsDataset, DiabetesDataset, get_index_dicts
+from Loader import SignedPairsDataset, DiabetesDataset, YellowFeverDataset, get_index_dicts
 from Models import PaddingAutoencoder, AE_Encoder, LSTM_Encoder, ERGO
 import pickle
 import numpy as np
@@ -274,6 +274,23 @@ class ERGODiabetes(ERGOLightning):
                                                                      cat_encoding=self.cat_encoding))
 
 
+class ERGOYellowFever(ERGOLightning):
+
+    def __init__(self, hparams):
+        super().__init__(hparams)
+        self.weight_factor = hparams.weight_factor
+
+    @pl.data_loader
+    def train_dataloader(self):
+        # REQUIRED
+        with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
+            train = pickle.load(handle)
+        train_dataset = YellowFeverDataset(train, get_index_dicts(train), weight_factor=self.weight_factor)
+        return DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=10,
+                          collate_fn=lambda b: train_dataset.collate(b, tcr_encoding=self.tcr_encoding_model,
+                                                                     cat_encoding=self.cat_encoding))
+
+
 def diabetes_experiment():
     parser = ArgumentParser()
     parser.add_argument('--version', type=int)
@@ -297,6 +314,52 @@ def diabetes_experiment():
     model = ERGODiabetes(hparams)
     # logger = TensorBoardLogger("diabetes_logs", name="d_mcpas_lstm_with_alpha")
     logger = TensorBoardLogger("diabetes_logs", name="ergo_ii_diabetes", version=hparams.version)
+    early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
+    trainer = Trainer(gpus=[hparams.gpu], logger=logger, early_stop_callback=early_stop_callback)
+    trainer.fit(model)
+
+
+def yellow_fever_experiment():
+    parser = ArgumentParser()
+    parser.add_argument('iter', type=int)
+    parser.add_argument('gpu', type=int)
+    parser.add_argument('dataset', type=str, help='vdjdb or vdjdb_no10x')
+    parser.add_argument('tcr_encoding_model', type=str, help='LSTM or AE')
+    parser.add_argument('--cat_encoding', type=str, default='embedding')
+    parser.add_argument('--use_alpha', action='store_true')
+    parser.add_argument('--use_vj', action='store_true')
+    parser.add_argument('--use_mhc', action='store_true')
+    parser.add_argument('--use_t_type', action='store_true')
+    parser.add_argument('--aa_embedding_dim', type=int, default=10)
+    parser.add_argument('--cat_embedding_dim', type=int, default=50)
+    parser.add_argument('--lstm_dim', type=int, default=500)
+    parser.add_argument('--encoding_dim', type=int, default=100)
+    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--wd', type=float, default=1e-5)
+    parser.add_argument('--dropout', type=float, default=0.1)
+    parser.add_argument('--weight_factor', type=int, default=5)
+    hparams = parser.parse_args()
+    model = ERGOLightning(hparams)
+    # version flags
+    version = 'yf'
+    version += str(hparams.iter)
+    if hparams.dataset == 'vdjdb_no10x':
+        version += 'n10x'
+    if hparams.tcr_encoding_model == 'AE':
+        version += 'e'
+    elif hparams.tcr_encoding_model == 'LSTM':
+        version += 'l'
+    if hparams.use_alpha:
+        version += 'a'
+    if hparams.use_vj:
+        version += 'j'
+    if hparams.use_mhc:
+        version += 'h'
+    if hparams.use_t_type:
+        version += 't'
+    version += str(hparams.weight_factor)
+
+    logger = TensorBoardLogger("yellow_fever", name="YF_models", version=version)
     early_stop_callback = EarlyStopping(monitor='val_auc', patience=3, mode='max')
     trainer = Trainer(gpus=[hparams.gpu], logger=logger, early_stop_callback=early_stop_callback)
     trainer.fit(model)
@@ -379,9 +442,10 @@ def ergo_ii_tuning():
 
 
 if __name__ == '__main__':
-    ergo_ii_experiment()
+    # ergo_ii_experiment()
     # diabetes_experiment()
     # ergo_ii_tuning()
+    yellow_fever_experiment()
     pass
 
 
@@ -390,3 +454,12 @@ if __name__ == '__main__':
 # or just conda activate dgx
 # see logs
 # tensorboard --logdir dir
+
+# python Trainer.py 1 2 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 5
+# python Trainer.py 1 3 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 1
+# python Trainer.py 1 3 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 10
+# python Trainer.py 1 2 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 20
+# nohup python Trainer.py 1 0 vdjdb_no10x AE --weight_factor 5
+# nohup python Trainer.py 1 1 vdjdb_no10x AE --weight_factor 1
+# nohup python Trainer.py 1 2 vdjdb_no10x AE --weight_factor 10
+# nohup python Trainer.py 1 3 vdjdb_no10x AE --weight_factor 20

@@ -1,14 +1,9 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
-import collections
 import pickle
 from Sampler import get_diabetes_peptides
 import pandas as pd
 import numpy as np
-import math
-# from collections import
-
-# another problem - standatization of v,j,mhc format (mainly in mcpas)
 
 
 class SignedPairsDataset(Dataset):
@@ -184,6 +179,21 @@ class DiabetesDataset(SignedPairsDataset):
     pass
 
 
+class YellowFeverDataset(SignedPairsDataset):
+    def __init__(self, samples, train_dicts, weight_factor):
+        super().__init__(samples, train_dicts)
+        self.yellow_fever_peptide = 'LLWNGPMAV'
+        self.weight_factor = weight_factor
+
+    def __getitem__(self, index):
+        sample = super().__getitem__(index)
+        peptide = sample['peptide']
+        if peptide == self.yellow_fever_peptide:
+            sample['weight'] *= self.weight_factor
+        return sample
+    pass
+
+
 class SinglePeptideDataset(SignedPairsDataset):
     def __init__(self, samples, train_dicts, peptide, force_peptide=False, spb_force=False):
         super().__init__(samples, train_dicts)
@@ -204,6 +214,7 @@ class SinglePeptideDataset(SignedPairsDataset):
                     sample['sign'] = 0
                 return sample
             # we do it only for MPS (and we have to check the true peptide)
+            # also for repertoire scoring
             else:
                 sample['peptide'] = self.peptide
                 return sample
@@ -233,14 +244,14 @@ def check():
 
     train_dataset = DiabetesDataset(train, dicts, weight_factor=10)
     train_dataloader = DataLoader(train_dataset, batch_size=10, shuffle=False, num_workers=4,
-                            collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='lstm',
+                            collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='LSTM',
                                                                        cat_encoding='embedding'))
     for batch in train_dataloader:
         print(batch)
         break
         # exit()
     test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=4,
-                                  collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='lstm',
+                                  collate_fn=lambda b: train_dataset.collate(b, tcr_encoding='LSTM',
                                                                              cat_encoding='embedding'))
     for batch in test_dataloader:
         print(batch)

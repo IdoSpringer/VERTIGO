@@ -621,4 +621,3 @@ if __name__ == '__main__':
     #     spb_table.to_csv('plots/vdjdb_spb_results.csv')
     pass
 
-# todo stats on how many alpha vs alpha + beta we have for each peptide in spb tables
