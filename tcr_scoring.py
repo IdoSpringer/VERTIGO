@@ -180,9 +180,11 @@ def main(rep, func):
             file = '_'.join([rep, time, 'F1']) + '.txt'
             samples = read_repertoire(file)
             scores, freqs = frequency_score_scatter(samples, yf_peptide, model, hparams)
-            plt.scatter(scores, freqs, color=colors[i], alpha=0.3, label=timepoints[i])
+            filtered_scores = [-np.log(1 - s) for s, f in zip(scores, freqs) if s > 0.6 and f > -9]
+            filtered_freqs = [f for s, f in zip(scores, freqs) if s > 0.6 and f > -9]
+            plt.scatter(filtered_scores, filtered_freqs, color=colors[i], alpha=0.3, label=timepoints[i])
         plt.title('Frequency and ERGO Yellow Fever Score Scatter')
-        plt.xlabel('ERGO Score')
+        plt.xlabel('-log(1 - score)')
         plt.ylabel('Log Frequency')
         plt.legend()
         plt.show()
