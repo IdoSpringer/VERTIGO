@@ -1,11 +1,12 @@
 import pandas as pd
 from Loader import SinglePeptideDataset, get_index_dicts
-from Trainer import ERGOYellowFever
+from Trainer import ERGOLightning
 import pickle
 import torch
 from torch.utils.data import DataLoader
 from argparse import Namespace
 import sys
+import matplotlib.pyplot as plt
 import os
 from os import listdir
 from os.path import isfile, join
@@ -14,60 +15,77 @@ from os.path import isfile, join
 def read_repertoire(file):
     print('Reading %s ...' % file)
     amino_acids = [letter for letter in 'ARNDCEQGHILKMFPSTWYV']
-    data = pd.read_csv(file, engine='python', sep='\t')
-    tcrs = data['AA. Seq. CDR3'].tolist()
-    tcrs = list(filter(lambda x: len(x) > 8, tcrs))
     def invalid(seq):
         return pd.isna(seq) or any([aa not in amino_acids for aa in seq])
-    tcrs = list(filter(lambda x: not invalid(x), tcrs))
+    def fixv(v):
+        if '-' in v:
+            return v.split('-')[0] + '-0' + v.split('-')[-1]
+        else:
+            return v
+    data = pd.read_csv(file, engine='python', sep='\t')
+    samples = []
+    tcrs = data['AA. Seq. CDR3'].tolist()
+    vs = data['All V hits'].tolist()
+    js = data['All J hits'].tolist()
+    for tcr, v, j in zip(tcrs, vs, js):
+        if invalid(tcr):
+            continue
+        if len(tcr) < 8:
+            continue
+        v = v.split(',')[0]
+        v = v.split('*')[0]
+        v = fixv(v)
+        j = j.split(',')[0]
+        j = j.split('*')[0]
+        samples.append({'tcrb': tcr,
+                        'tcra': 'UNK',
+                        'va': 'UNK',
+                        'ja': 'UNK',
+                        'vb': v,
+                        'jb': j,
+                        'mhc': 'UNK',
+                        't_cell_type': 'UNK',
+                        'sign': 0})
     print('Done reading file')
-    return tcrs
+    return samples
 
 
 def load_model(hparams, checkpoint_path):
-    model = ERGOYellowFever(hparams)
+    model = ERGOLightning(hparams)
     checkpoint = torch.load(checkpoint_path, map_location='cuda:1')
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     return model
 
 
-def score(tcrs, peptide, model, hparams, threshold=0.9):
-    # actually not relevant in this case (without V gene)
+def score(samples, peptide, model, hparams, threshold=0.9, detect_tcrs=False):
     train_file = 'Samples/' + model.dataset + '_train_samples.pickle'
     with open(train_file, 'rb') as handle:
         train = pickle.load(handle)
     train_dicts = get_index_dicts(train)
-    samples = []
-    for tcr in tcrs:
-        samples.append({'tcrb': tcr,
-                        'tcra': 'UNK',
-                        'va': 'UNK',
-                        'ja': 'UNK',
-                        'vb': 'UNK',
-                        'jb': 'UNK',
-                        'mhc': 'UNK',
-                        't_cell_type': 'UNK',
-                        'sign': 0})
     testset = SinglePeptideDataset(samples, train_dicts, peptide,
                                    force_peptide=True, spb_force=False)
     loader = DataLoader(testset, batch_size=2048, shuffle=False, num_workers=10,
                         collate_fn=lambda b: testset.collate(b, tcr_encoding=hparams.tcr_encoding_model,
                                                              cat_encoding=hparams.cat_encoding))
     yf_tcrs = []
+    model.eval()
+    scores = []
     with torch.no_grad():
         for batch_idx, batch in enumerate(loader):
             print(batch_idx)
-            model.eval()
             outputs = model.validation_step(batch, batch_idx)['y_hat']
-            # print(outputs)
-            indicies = outputs > threshold
-            pos_tcrb = batch[1][indicies]
-            for tcr_tensor in pos_tcrb:
-                tcr = decode_tcr(tcr_tensor)
-                print(tcr)
-                yf_tcrs.append(tcr)
-    return yf_tcrs
+            scores.extend(outputs.tolist())
+            if detect_tcrs:
+                indicies = outputs > threshold
+                pos_tcrb = batch[1][indicies]
+                for tcr_tensor in pos_tcrb:
+                    tcr = decode_tcr(tcr_tensor)
+                    print(tcr)
+                    yf_tcrs.append(tcr)
+            if batch_idx >= 10:
+                break
+    return scores, yf_tcrs
 
 
 def decode_tcr(tcr_tensor):
@@ -83,14 +101,16 @@ def decode_tcr(tcr_tensor):
     return tcr
 
 
-def main(version, rep_file):
+def main(rep):
     # get model file from version
-    model_dir = 'yellow_fever/YF_models'
-    checkpoint_path = os.path.join(model_dir, 'version_' + version, 'checkpoints')
-    files = [f for f in listdir(checkpoint_path) if isfile(join(checkpoint_path, f))]
-    checkpoint_path = os.path.join(checkpoint_path, files[0])
+    # model_dir = 'yellow_fever/YF_models'
+    # checkpoint_path = os.path.join(model_dir, 'version_' + version, 'checkpoints')
+    # files = [f for f in listdir(checkpoint_path) if isfile(join(checkpoint_path, f))]
+    # checkpoint_path = os.path.join(checkpoint_path, files[0])
+    checkpoint_path = 'paper_models/version_1mej/checkpoints/_ckpt_epoch_9.ckpt'
     # get args from version
-    args_path = os.path.join(model_dir, version, 'meta_tags.csv')
+    # args_path = os.path.join(model_dir, version, 'meta_tags.csv')
+    args_path = 'ERGO-II_paper_logs/paper_models/version_1mej/meta_tags.csv'
     with open(args_path, 'r') as file:
         lines = file.readlines()
         args = {}
@@ -104,15 +124,26 @@ def main(version, rep_file):
     checkpoint = checkpoint_path
     model = load_model(hparams, checkpoint)
     yf_peptide = 'LLWNGPMAV'
-    tcrs = read_repertoire(rep_file)
-    yf_tcrs = score(tcrs, yf_peptide, model, hparams)
+    colors = ['r', 'g', 'b', 'y', 'c']
+    timepoints = ['-1', '0', '7', '15', '45']
+    for i, time in enumerate(timepoints):
+        file = '_'.join([rep, time, 'F1']) + '.txt'
+        samples = read_repertoire(file)
+        scores, yf_tcrs = score(samples, yf_peptide, model, hparams)
+        plt.hist(scores, 100, facecolor=colors[i], alpha=0.2, label=timepoints[i], histtype='bar')
+    plt.title('ERGO Score Histogram for Yellow Fever Peptide')
+    plt.xlabel('ERGO Score')
+    plt.ylabel('Number of TCRs')
+    plt.legend()
+    plt.show()
     return
 
 
 if __name__ == '__main__':
-    version = 'yf1n10xe' + sys.argv[1]
-    file = 'yellow_fever/Yellow_fever/' + sys.argv[2]
-    main(version, file)
+    # we use mcpas model with v and j
+    # we do not train again with extra weight on yf
+    rep = 'yellow_fever/Yellow_fever/' + sys.argv[1]
+    main(rep)
     pass
 
-# python tcr_scoring.py 5 P1_0_F1.txt
+# python tcr_scoring.py P1_0_F1.txt
