@@ -91,7 +91,7 @@ def score(samples, peptide, model, hparams, threshold=0.9, detect_tcrs=False):
     return scores, yf_tcrs
 
 
-def frequency_score_scatter(samples, peptide, model, hparams):
+def frequency_score_scatter(samples, peptide, model, hparams, detect_tcrs=False):
     train_file = 'Samples/' + model.dataset + '_train_samples.pickle'
     with open(train_file, 'rb') as handle:
         train = pickle.load(handle)
@@ -110,10 +110,19 @@ def frequency_score_scatter(samples, peptide, model, hparams):
         for batch_idx, batch in enumerate(loader):
             print(batch_idx)
             outputs = model.validation_step(batch, batch_idx)['y_hat']
-            scores.extend(outputs.tolist())
-            freqs += [np.log(s['freq']) for s in samples[i:i+batch_size]]
+            f_outputs = [-np.log(1 - s) for s in outputs.tolist()]
+            scores += f_outputs
+            f_freqs = [np.log(s['freq']) for s in samples[i:i+batch_size]]
+            freqs += f_freqs
             i += batch_size
             assert len(scores) == len(freqs)
+            if detect_tcrs:
+                indicies = [i for i, (f, s) in enumerate(zip(f_freqs, f_outputs)) if f > -8 and s > 2]
+                pos_tcrb = batch[1][[indicies]]
+                assert len(pos_tcrb) == len(indicies)
+                for j, tcr_tensor in zip(indicies, pos_tcrb):
+                    tcr = decode_tcr(tcr_tensor)
+                    print('\t'.join([tcr, str(f_outputs[j]), str(f_freqs[j])]))
             if batch_idx >= 5:
                 break
     return scores, freqs
@@ -169,19 +178,14 @@ def main(rep, func):
         plt.legend()
         plt.show()
     if func == 'scatter':
-        # file = '_'.join([rep, '15', 'F1']) + '.txt'
-        # samples = read_repertoire(file)
-        # scores, freqs = frequency_score_scatter(samples, yf_peptide, model, hparams)
-        # plt.scatter(scores, freqs)
-        # plt.show()
         colors = ['r', 'g', 'b', 'y', 'c']
         timepoints = ['-1', '0', '7', '15', '45']
         for i, time in enumerate(timepoints):
             file = '_'.join([rep, time, 'F1']) + '.txt'
             samples = read_repertoire(file)
-            scores, freqs = frequency_score_scatter(samples, yf_peptide, model, hparams)
-            filtered_scores = [-np.log(1 - s) for s, f in zip(scores, freqs) if s > 0.6 and f > -9]
-            filtered_freqs = [f for s, f in zip(scores, freqs) if s > 0.6 and f > -9]
+            scores, freqs = frequency_score_scatter(samples, yf_peptide, model, hparams, detect_tcrs=True)
+            filtered_scores = [s for s, f in zip(scores, freqs) if s >= 2 and f > -9]
+            filtered_freqs = [f for s, f in zip(scores, freqs) if s >= 2 and f > -9]
             plt.scatter(filtered_scores, filtered_freqs, color=colors[i], alpha=0.3, label=timepoints[i])
         plt.title('Frequency and ERGO Yellow Fever Score Scatter')
         plt.xlabel('-log(1 - score)')
