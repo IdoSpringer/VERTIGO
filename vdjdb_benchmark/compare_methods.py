@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
 
 
-def roc(file):
+def roc(file, title):
     df = pd.read_csv(file)
     i = 0
     epitopes = list(set(df.Antigen.values))
     # creating subplots for each epitope. They will be plotted in one line
     fig, axes = plt.subplots(1, len(epitopes), figsize=(4 * len(epitopes), 2 * len(epitopes)))
     # creating a title
-    plt.suptitle(f'Using data with duplicates, TRB')
+    plt.suptitle(f'Using data with duplicates, TRB, ' + title)
 
     # for each epitope
     for epitope, data in df.groupby('Antigen'):
@@ -42,9 +42,9 @@ if __name__ == '__main__':
     # netTCR.roc()
 
     # roc('nettcr_predictions.csv')
-    roc('ergo_ae_mcpas.csv')
-    roc('ergo_ae_vdjdb.csv')
-    roc('ergo_lstm_mcpas.csv')
-    roc('ergo_lstm_vdjdb.csv')
+    roc('ergo_ae_mcpas.csv', 'Trained on McPAS')
+    roc('ergo_ae_vdjdb.csv', 'Trained on VDJdb')
+    roc('ergo_lstm_mcpas.csv', 'Trained on McPAS')
+    roc('ergo_lstm_vdjdb.csv', 'Trained on VDJdb')
 
     pass
