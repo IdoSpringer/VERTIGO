@@ -1,0 +1,13 @@
+# there are already some models in the VDJdb benckmark -
+check https://github.com/antigenomics/vdjdb-classifier-benchmark
+
+# NetTCR is the most similar method to ERGO.
+They provided scores for a csv file of positive and negative samples for 3 peptides.
+Lets try sticking to this file.
+
+# ERGO website predicts well, but it used VDJdb as training database.
+we can train on mcpas, but we should (and requested to) do 10 fold cross validation
+
+# let's compare AUC for our current predictions and then try to train again with cross validation
+
+# first try without V and J, later we will add it (by querying database)
