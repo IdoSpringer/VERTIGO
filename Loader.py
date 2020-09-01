@@ -63,9 +63,6 @@ class SignedPairsDataset(Dataset):
         return padding
 
     def label_encoding(self):
-        # this will be label with learned embedding matrix (so not 1 dimension)
-        # get all possible tags
-        # in init ?
         pass
 
     def binary_encoding(self):
@@ -98,7 +95,7 @@ class SignedPairsDataset(Dataset):
             lst.append(torch.FloatTensor(self.seq_one_hot_encoding(tcrb)))
         elif tcr_encoding == 'LSTM':
             lst.append(torch.LongTensor(self.seq_letter_encoding(tcra)))
-            # we do not sent the length, so that ae and lstm batch output be similar
+            # we do not send the length, so that ae and lstm batch output be similar
             lst.append(torch.LongTensor(self.seq_letter_encoding(tcrb)))
         # Peptide
         peptide = [self.aa_convert(sample['peptide']) for sample in batch]
@@ -115,7 +112,6 @@ class SignedPairsDataset(Dataset):
                 batch_cat = torch.LongTensor(batch_idx)
             if cat_encoding == 'binary':
                 # we need a matrix for the batch with the binary encodings
-                # hyperparam ?
                 max_len = 10
                 def bin_pad(num, _max_len):
                     bin_list = self.binarize(num)
@@ -136,9 +132,6 @@ class SignedPairsDataset(Dataset):
         factor = self.pos_weight_factor
         weight = [sample['weight'] for sample in batch]
         lst.append(torch.FloatTensor(weight))
-        # weight will be handled in trainer (it is not loader job) -
-        # It is - this is how we mark diabetes to get heavier weight
-        # lst.append(torch.FloatTensor(weight))
         return lst
     pass
 
@@ -205,7 +198,7 @@ class SinglePeptideDataset(SignedPairsDataset):
 
     def __getitem__(self, index):
         sample = self.data[index]
-        # weight does not matter, we do not train with this dataset
+        # weight does not matter here, we do not train with this dataset
         sample['weight'] = 0
         if self.force_peptide:
             # we keep the original positives, else is negatives
@@ -220,9 +213,7 @@ class SinglePeptideDataset(SignedPairsDataset):
                 return sample
         else:
             # original spb task
-            # print(sample['peptide'])
             if sample['peptide'] != self.peptide:
-                # print(sample['peptide'])
                 return None
             return sample
     pass
@@ -236,9 +227,9 @@ def check():
         test = pickle.load(handle)
     dicts = get_index_dicts(train)
     vatox, vbtox, jatox, jbtox, mhctox = dicts
-    # print(len(vatox))
-    # for v in vatox:
-    #     print(v)
+    print(len(vatox))
+    for v in vatox:
+        print(v)
     train_dataset = SignedPairsDataset(train, dicts)
     test_dataset = SignedPairsDataset(test, dicts)
 

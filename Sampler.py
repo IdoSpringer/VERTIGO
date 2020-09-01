@@ -99,14 +99,6 @@ def positive_examples(pairs):
         pos_samples.append(sample)
     return pos_samples
 
-# Removing this function - assuming every (tcrb,pep) pair appears only once in a dataset
-# def is_negative(all_pairs, tcrb, pep):
-#     for sample in all_pairs:
-#         # we do not check for full sample match, this is enough
-#         if sample['tcrb'] == tcrb and sample['peptide'] == pep:
-#             return False
-#     return True
-
 
 def negative_examples(pairs, all_pairs, size):
     '''
@@ -115,8 +107,6 @@ def negative_examples(pairs, all_pairs, size):
     '''
     neg_samples = []
     i = 0
-    # tcrs = [tcr_data for (tcr_data, pep_data) in pairs]
-    # peps = [pep_data for (tcr_data, pep_data) in pairs]
     while i < size:
         # choose randomly two samples. match tcr data with pep data
         pep_sample = random.choice(pairs)
@@ -178,12 +168,7 @@ def sample():
     # sample_data('data/VDJDB_complete.tsv', 'vdjdb', 'vdjdb_no10x_train_samples', 'vdjdb_no10x_test_samples', use_10x=False)
     # t2 = time.time()
     # print('done in ' + str(t2 - t1) + ' seconds')
-
     pass
-
-#  sample united dataset ?
-
-# Notice the different negative sampling - 5 random pairs instead of 5 random TCRs per random peptide
 
 
 def get_diabetes_peptides(datafile):
@@ -239,7 +224,6 @@ def check():
     pass
 
 
-# check()
 if __name__ == '__main__':
     # sample()
     # frequent_peptides()

@@ -42,12 +42,6 @@ def load_test(datafiles):
 
 
 def true_new_pairs(args, datafiles):
-    # tpp-i slightly depends on what features were used
-    # e.g. two samples with same tcrb but different tcra
-    # if we use alpha, one can be in train and other in test
-    # if we do not use alpha, one cannot be in test
-    # but when we train with alpha, we cause train leakage... how can we handle this?
-    # we do not. if we have many samples with identical beta chain, tpp-i is not so relevant
     train_pickle, test_pickle = datafiles
     # open and read data
     # return TCRs and peps that appear only in test pairs

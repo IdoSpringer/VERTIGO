@@ -13,8 +13,6 @@ import numpy as np
 from sklearn.metrics import roc_auc_score, roc_curve
 from argparse import ArgumentParser
 
-# keep up the good work :)
-
 
 class ERGOLightning(pl.LightningModule):
 
@@ -190,7 +188,6 @@ class ERGOLightning(pl.LightningModule):
         return y, y_hat, weight
 
     def training_step(self, batch, batch_idx):
-        # REQUIRED
         self.train()
         y, y_hat, weight = self.step(batch)
         loss = F.binary_cross_entropy(y_hat, y, weight=weight)
@@ -198,7 +195,6 @@ class ERGOLightning(pl.LightningModule):
         return {'loss': loss, 'log': tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
-        # OPTIONAL
         self.eval()
         if self.step(batch):
             y, y_hat, _ = self.step(batch)
@@ -207,7 +203,6 @@ class ERGOLightning(pl.LightningModule):
             return None
 
     def validation_end(self, outputs):
-        # OPTIONAL
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
         y = torch.cat([x['y'].view(-1, 1) for x in outputs])
         y_hat = torch.cat([x['y_hat'].view(-1, 1) for x in outputs])
@@ -224,14 +219,10 @@ class ERGOLightning(pl.LightningModule):
         pass
 
     def configure_optimizers(self):
-        # REQUIRED
-        # can return multiple optimizers and learning_rate schedulers
-        # (LBFGS it is automatically supported, no need for closure function)
         return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
 
     @pl.data_loader
     def train_dataloader(self):
-        # REQUIRED
         with open('Samples/' + self.dataset + '_train_samples.pickle', 'rb') as handle:
             train = pickle.load(handle)
         train_dataset = SignedPairsDataset(train, get_index_dicts(train))
@@ -241,7 +232,6 @@ class ERGOLightning(pl.LightningModule):
 
     @pl.data_loader
     def val_dataloader(self):
-        # OPTIONAL
         with open('Samples/' + self.dataset + '_test_samples.pickle', 'rb') as handle:
             test = pickle.load(handle)
         with open('Samples/' + self.dataset + '_train_samples.pickle', 'rb') as handle:
@@ -253,7 +243,6 @@ class ERGOLightning(pl.LightningModule):
 
     @pl.data_loader
     def test_dataloader(self):
-        # OPTIONAL
         pass
 
 
@@ -265,7 +254,6 @@ class ERGODiabetes(ERGOLightning):
 
     @pl.data_loader
     def train_dataloader(self):
-        # REQUIRED
         with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
             train = pickle.load(handle)
         train_dataset = DiabetesDataset(train, get_index_dicts(train), weight_factor=self.weight_factor)
@@ -282,7 +270,6 @@ class ERGOYellowFever(ERGOLightning):
 
     @pl.data_loader
     def train_dataloader(self):
-        # REQUIRED
         with open(self.dataset + '_train_samples.pickle', 'rb') as handle:
             train = pickle.load(handle)
         train_dataset = YellowFeverDataset(train, get_index_dicts(train), weight_factor=self.weight_factor)
@@ -445,21 +432,13 @@ if __name__ == '__main__':
     # ergo_ii_experiment()
     # diabetes_experiment()
     # ergo_ii_tuning()
-    yellow_fever_experiment()
+    # yellow_fever_experiment()
     pass
 
 
 # NOTE: fix sklearn import problem with this in terminal:
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/dsi/speingi/anaconda3/lib/
 # or just conda activate dgx
+
 # see logs
 # tensorboard --logdir dir
-
-# python Trainer.py 1 2 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 5
-# python Trainer.py 1 3 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 1
-# python Trainer.py 1 3 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 10
-# python Trainer.py 1 2 vdjdb_no10x AE --use_alpha --use_vj --use_mhc --use_t_type --weight_factor 20
-# nohup python Trainer.py 1 0 vdjdb_no10x AE --weight_factor 5
-# nohup python Trainer.py 1 1 vdjdb_no10x AE --weight_factor 1
-# nohup python Trainer.py 1 2 vdjdb_no10x AE --weight_factor 10
-# nohup python Trainer.py 1 3 vdjdb_no10x AE --weight_factor 20
