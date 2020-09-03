@@ -136,17 +136,21 @@ def spb_linear_regression_coefficients(results_file):
         lstm_results = [pep_results[i] for i in range(len(pep_results)) if not i % 2]
         reg_ae = LinearRegression().fit(X, ae_results)
         reg_lstm = LinearRegression().fit(X, lstm_results)
-        labels = ['TCR' + r'$\alpha$', 'V, J', 'MHC', 'T-Cell Type']
-        assert len(labels) == len(reg_ae.coef_.reshape(-1, 1))
-        plot_data = np.concatenate((reg_ae.coef_.reshape(-1, 1),
-                                    reg_lstm.coef_.reshape(-1, 1)), axis=1)
+        labels = ['TCR' + r'$\beta$', 'TCR' + r'$\alpha$', 'V, J', 'MHC', 'T-Type']
+        ae_plot = np.concatenate([np.array([reg_ae.intercept_ - 0.5]), reg_ae.coef_])
+        lstm_plot = np.concatenate([np.array([reg_lstm.intercept_ - 0.5]), reg_lstm.coef_])
+        assert len(labels) == len(ae_plot.reshape(-1, 1))
+        # plot_data = np.concatenate((reg_ae.coef_.reshape(-1, 1),
+        #                             reg_lstm.coef_.reshape(-1, 1)), axis=1)
+        plot_data = np.concatenate((ae_plot.reshape(-1, 1),
+                                    lstm_plot.reshape(-1, 1)), axis=1)
         avg.append(plot_data)
         plt.subplot(5, 4, j + 1)
         bplot = plt.boxplot(plot_data.T,
                             vert=True,  # vertical box alignment
                             patch_artist=True,  # fill with color
                             labels=labels),
-        colors = ['silver', 'orchid', 'goldenrod', 'deepskyblue']
+        colors = ['dodgerblue', 'silver', 'seagreen', 'goldenrod', 'tomato']
         for patch, color in zip(bplot[0]['boxes'], colors):
             patch.set_facecolor(color)
         # axes = plt.gca()
