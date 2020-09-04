@@ -202,23 +202,25 @@ def tpp_linear_regression_coefficients(results_file):
     reg_m_lstm = LinearRegression().fit(X, m_lstm_results)
     labels = ['TPP-I', 'TPP-II', 'TPP-III', 'TCR' + r'$\alpha$', 'V, J', 'MHC', 'T-Cell Type']
     assert len(labels) == len(reg_m_ae.coef_.reshape(-1, 1))
-    # plot_data = np.concatenate((reg_m_ae.coef_.reshape(-1, 1),
-    #                             reg_m_lstm.coef_.reshape(-1, 1)), axis=1)
-    # bplot = plt.boxplot(plot_data.T,
-    #                     vert=True,  # vertical box alignment
-    #                     patch_artist=True,  # fill with color
-    #                     labels=labels),
-    bars = plt.bar(range(len(labels)), reg_m_ae.coef_, width=0.2,
-            label='AE', color='dodgerblue')
-    for i in range(3):
-        bars[i].set_color('indigo')
-    bars = plt.bar([x+0.2 for x in range(len(labels))], reg_m_lstm.coef_,
-            width=0.2, label='LSTM', color='salmon')
-    for i in range(3):
-        bars[i].set_color('indianred')
+    bars1 = plt.bar(range(3), reg_m_ae.coef_[:3], width=0.2,
+            label='AE', color='indigo')
+    bars2 = plt.bar(range(3, 7), reg_m_ae.coef_[3:], width=0.2,
+                   label='AE', color='dodgerblue')
+    bars3 = plt.bar([x + 0.2 for x in range(3)], reg_m_lstm.coef_[:3],
+            width=0.2, label='LSTM', color='indianred')
+    bars4 = plt.bar([x + 0.2 for x in range(3,7)], reg_m_lstm.coef_[3:],
+                   width=0.2, label='LSTM', color='salmon')
+
     plt.legend()
+    first_legend = plt.legend(handles=[bars1, bars3], loc='upper left')
+    ax = plt.gca().add_artist(first_legend)
+    plt.legend(handles=[bars2, bars4], loc='upper right')
     plt.xticks([x+0.2 for x in range(len(labels))], labels)
     plt.axhline(0, color='black', lw=0.5)
+    plt.axvline(2.6, color='black', lw=0.5, dashes=(10, 6))
+
+
+
     plt.title('McPAS TPP Linear Regression Coefficients', fontdict={'fontsize': 14})
     plt.ylabel('AUC Contribution', fontdict={'fontsize': 14})
     colors = ['lightblue'] * 3 + ['lightgreen'] * 4
@@ -237,5 +239,5 @@ if __name__ == '__main__':
     # mhc_type_comp_logos()
     # linear_regression_coefficients('tpp')
     # linear_regression_coefficients('spb')
-    spb_linear_regression_coefficients('mcpas_spb_results.csv')
-    # tpp_linear_regression_coefficients('tpp_results.csv')
+    # spb_linear_regression_coefficients('mcpas_spb_results.csv')
+    tpp_linear_regression_coefficients('tpp_results.csv')
