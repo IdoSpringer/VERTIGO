@@ -200,17 +200,21 @@ def tpp_linear_regression_coefficients(results_file):
     m_lstm_results = results['mcpas_lstm']
     reg_m_ae = LinearRegression().fit(X, m_ae_results)
     reg_m_lstm = LinearRegression().fit(X, m_lstm_results)
-    labels = ['TPP-I', 'TPP-II', 'TPP-III', 'TCR' + r'$\alpha$', 'V, J', 'MHC', 'T-Cell Type']
-    assert len(labels) == len(reg_m_ae.coef_.reshape(-1, 1))
-    bars1 = plt.bar(range(3), reg_m_ae.coef_[:3], width=0.2,
-            label='AE', color='indigo')
-    bars2 = plt.bar(range(3, 7), reg_m_ae.coef_[3:], width=0.2,
-                   label='AE', color='dodgerblue')
-    bars3 = plt.bar([x + 0.2 for x in range(3)], reg_m_lstm.coef_[:3],
-            width=0.2, label='LSTM', color='indianred')
-    bars4 = plt.bar([x + 0.2 for x in range(3,7)], reg_m_lstm.coef_[3:],
-                   width=0.2, label='LSTM', color='salmon')
 
+    ae_plot = np.concatenate([reg_m_ae.coef_[:3], np.array([reg_m_ae.intercept_ - 0.5]), reg_m_ae.coef_[3:]])
+    print(ae_plot)
+    lstm_plot = np.concatenate([reg_m_lstm.coef_[:3], np.array([reg_m_lstm.intercept_ - 0.5]), reg_m_lstm.coef_[3:]])
+    print(lstm_plot)
+    labels = ['TPP-I', 'TPP-II', 'TPP-III', 'TCR' + r'$\beta$', 'TCR' + r'$\alpha$', 'V, J', 'MHC', 'T-Cell Type']
+    assert len(labels) == len(ae_plot.reshape(-1, 1))
+    bars1 = plt.bar(range(3), ae_plot[:3], width=0.2,
+            label='AE', color='indigo')
+    bars2 = plt.bar(range(3, 8), ae_plot[3:], width=0.2,
+                   label='AE', color='dodgerblue')
+    bars3 = plt.bar([x + 0.2 for x in range(3)], lstm_plot[:3],
+            width=0.2, label='LSTM', color='indianred')
+    bars4 = plt.bar([x + 0.2 for x in range(3, 8)], lstm_plot[3:],
+                   width=0.2, label='LSTM', color='salmon')
     plt.legend()
     first_legend = plt.legend(handles=[bars1, bars3], loc='upper left')
     ax = plt.gca().add_artist(first_legend)
@@ -218,20 +222,14 @@ def tpp_linear_regression_coefficients(results_file):
     plt.xticks([x+0.2 for x in range(len(labels))], labels)
     plt.axhline(0, color='black', lw=0.5)
     plt.axvline(2.6, color='black', lw=0.5, dashes=(10, 6))
-
-
-
     plt.title('McPAS TPP Linear Regression Coefficients', fontdict={'fontsize': 14})
     plt.ylabel('AUC Contribution', fontdict={'fontsize': 14})
     colors = ['lightblue'] * 3 + ['lightgreen'] * 4
-    # print(bplot)
-    # for patch, color in zip(bplot[0]['boxes'], colors):
-    #     patch.set_facecolor(color)
     plt.tight_layout()
     print(reg_m_ae.coef_)
     print(reg_m_lstm.coef_)
     print('The standart error between the models is bounded by %.3f' %
-          max(np.std([reg_m_ae.coef_, reg_m_lstm.coef_], axis=0)))
+          max(np.std([ae_plot, lstm_plot], axis=0)))
     plt.show()
 
 
